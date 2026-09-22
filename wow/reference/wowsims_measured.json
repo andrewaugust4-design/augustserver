@@ -1,0 +1,614 @@
+{
+ "source": "wowsims/sod sim/core/base_stats.go (master, fetched 2026-09-22), measured from naked in-game characters (Human baseline + RaceOffsets). Used only to VALIDATE the sheet's sources, not as its data.",
+ "class_base_stats": {
+  "1": {
+   "25": {
+    "Health": 274.0,
+    "Mana": 0.0,
+    "Agility": 39.0,
+    "Strength": 54.0,
+    "Intellect": 23.0,
+    "Spirit": 28.0,
+    "Stamina": 50.0
+   },
+   "40": {
+    "Health": 649.0,
+    "Mana": 0.0,
+    "Agility": 54.0,
+    "Strength": 79.0,
+    "Intellect": 26.0,
+    "Spirit": 34.0,
+    "Stamina": 72.0
+   },
+   "50": {
+    "Health": 1079.0,
+    "Mana": 0.0,
+    "Agility": 66.0,
+    "Strength": 98.0,
+    "Intellect": 28.0,
+    "Spirit": 39.0,
+    "Stamina": 90.0
+   },
+   "60": {
+    "Health": 1689.0,
+    "Mana": 0.0,
+    "Agility": 80.0,
+    "Strength": 120.0,
+    "Intellect": 30.0,
+    "Spirit": 45.0,
+    "Stamina": 110.0
+   }
+  },
+  "2": {
+   "25": {
+    "Health": 266.0,
+    "Mana": 552.0,
+    "Agility": 34.0,
+    "Strength": 48.0,
+    "Intellect": 36.0,
+    "Spirit": 38.0,
+    "Stamina": 47.0
+   },
+   "40": {
+    "Health": 621.0,
+    "Mana": 987.0,
+    "Agility": 46.0,
+    "Strength": 70.0,
+    "Intellect": 49.0,
+    "Spirit": 52.0,
+    "Stamina": 67.0
+   },
+   "50": {
+    "Health": 966.0,
+    "Mana": 1257.0,
+    "Agility": 55.0,
+    "Strength": 86.0,
+    "Intellect": 59.0,
+    "Spirit": 63.0,
+    "Stamina": 82.0
+   },
+   "60": {
+    "Health": 1381.0,
+    "Mana": 1512.0,
+    "Agility": 65.0,
+    "Strength": 105.0,
+    "Intellect": 70.0,
+    "Spirit": 75.0,
+    "Stamina": 100.0
+   }
+  },
+  "3": {
+   "25": {
+    "Health": 292.0,
+    "Mana": 611.0,
+    "Agility": 55.0,
+    "Strength": 31.0,
+    "Intellect": 34.0,
+    "Spirit": 37.0,
+    "Stamina": 43.0
+   },
+   "40": {
+    "Health": 667.0,
+    "Mana": 1105.0,
+    "Agility": 81.0,
+    "Strength": 40.0,
+    "Intellect": 46.0,
+    "Spirit": 49.0,
+    "Stamina": 61.0
+   },
+   "50": {
+    "Health": 1047.0,
+    "Mana": 1420.0,
+    "Agility": 102.0,
+    "Strength": 47.0,
+    "Intellect": 55.0,
+    "Spirit": 59.0,
+    "Stamina": 74.0
+   },
+   "60": {
+    "Health": 1467.0,
+    "Mana": 1720.0,
+    "Agility": 125.0,
+    "Strength": 55.0,
+    "Intellect": 65.0,
+    "Spirit": 70.0,
+    "Stamina": 90.0
+   }
+  },
+  "4": {
+   "25": {
+    "Health": 318.0,
+    "Mana": 0.0,
+    "Agility": 57.0,
+    "Strength": 40.0,
+    "Intellect": 25.0,
+    "Spirit": 30.0,
+    "Stamina": 38.0
+   },
+   "40": {
+    "Health": 703.0,
+    "Mana": 0.0,
+    "Agility": 84.0,
+    "Strength": 55.0,
+    "Intellect": 29.0,
+    "Spirit": 37.0,
+    "Stamina": 52.0
+   },
+   "50": {
+    "Health": 1068.0,
+    "Mana": 0.0,
+    "Agility": 106.0,
+    "Strength": 67.0,
+    "Intellect": 32.0,
+    "Spirit": 43.0,
+    "Stamina": 63.0
+   },
+   "60": {
+    "Health": 1523.0,
+    "Mana": 0.0,
+    "Agility": 130.0,
+    "Strength": 80.0,
+    "Intellect": 35.0,
+    "Spirit": 50.0,
+    "Stamina": 75.0
+   }
+  },
+  "5": {
+   "25": {
+    "Health": 302.0,
+    "Mana": 497.0,
+    "Agility": 26.0,
+    "Strength": 25.0,
+    "Intellect": 53.0,
+    "Spirit": 55.0,
+    "Stamina": 30.0
+   },
+   "40": {
+    "Health": 637.0,
+    "Mana": 911.0,
+    "Agility": 31.0,
+    "Strength": 29.0,
+    "Intellect": 78.0,
+    "Spirit": 81.0,
+    "Stamina": 37.0
+   },
+   "50": {
+    "Health": 972.0,
+    "Mana": 1166.0,
+    "Agility": 35.0,
+    "Strength": 32.0,
+    "Intellect": 98.0,
+    "Spirit": 102.0,
+    "Stamina": 43.0
+   },
+   "60": {
+    "Health": 1397.0,
+    "Mana": 1376.0,
+    "Agility": 40.0,
+    "Strength": 35.0,
+    "Intellect": 120.0,
+    "Spirit": 125.0,
+    "Stamina": 50.0
+   }
+  },
+  "7": {
+   "25": {
+    "Health": 257.0,
+    "Mana": 505.0,
+    "Agility": 31.0,
+    "Strength": 41.0,
+    "Intellect": 43.0,
+    "Spirit": 47.0,
+    "Stamina": 45.0
+   },
+   "40": {
+    "Health": 610.0,
+    "Mana": 975.0,
+    "Agility": 40.0,
+    "Strength": 58.0,
+    "Intellect": 61.0,
+    "Spirit": 67.0,
+    "Stamina": 63.0
+   },
+   "50": {
+    "Health": 947.0,
+    "Mana": 1255.0,
+    "Agility": 47.0,
+    "Strength": 70.0,
+    "Intellect": 74.0,
+    "Spirit": 82.0,
+    "Stamina": 78.0
+   },
+   "60": {
+    "Health": 1280.0,
+    "Mana": 1520.0,
+    "Agility": 55.0,
+    "Strength": 85.0,
+    "Intellect": 90.0,
+    "Spirit": 100.0,
+    "Stamina": 95.0
+   }
+  },
+  "8": {
+   "25": {
+    "Health": 315.0,
+    "Mana": 481.0,
+    "Agility": 25.0,
+    "Strength": 23.0,
+    "Intellect": 55.0,
+    "Spirit": 53.0,
+    "Stamina": 28.0
+   },
+   "40": {
+    "Health": 630.0,
+    "Mana": 853.0,
+    "Agility": 29.0,
+    "Strength": 26.0,
+    "Intellect": 81.0,
+    "Spirit": 78.0,
+    "Stamina": 34.0
+   },
+   "50": {
+    "Health": 955.0,
+    "Mana": 1048.0,
+    "Agility": 32.0,
+    "Strength": 28.0,
+    "Intellect": 102.0,
+    "Spirit": 98.0,
+    "Stamina": 39.0
+   },
+   "60": {
+    "Health": 1370.0,
+    "Mana": 1213.0,
+    "Agility": 35.0,
+    "Strength": 30.0,
+    "Intellect": 125.0,
+    "Spirit": 120.0,
+    "Stamina": 45.0
+   }
+  },
+  "9": {
+   "25": {
+    "Health": 279.0,
+    "Mana": 498.0,
+    "Agility": 30.0,
+    "Strength": 28.0,
+    "Intellect": 50.0,
+    "Spirit": 52.0,
+    "Stamina": 35.0
+   },
+   "40": {
+    "Health": 634.0,
+    "Mana": 923.0,
+    "Agility": 37.0,
+    "Strength": 34.0,
+    "Intellect": 72.0,
+    "Spirit": 75.0,
+    "Stamina": 46.0
+   },
+   "50": {
+    "Health": 979.0,
+    "Mana": 1163.0,
+    "Agility": 43.0,
+    "Strength": 39.0,
+    "Intellect": 90.0,
+    "Spirit": 94.0,
+    "Stamina": 55.0
+   },
+   "60": {
+    "Health": 1414.0,
+    "Mana": 1373.0,
+    "Agility": 50.0,
+    "Strength": 45.0,
+    "Intellect": 110.0,
+    "Spirit": 115.0,
+    "Stamina": 65.0
+   }
+  },
+  "11": {
+   "25": {
+    "Health": 318.0,
+    "Mana": 479.0,
+    "Agility": 33.0,
+    "Strength": 35.0,
+    "Intellect": 47.0,
+    "Spirit": 50.0,
+    "Stamina": 36.0
+   },
+   "40": {
+    "Health": 683.0,
+    "Mana": 854.0,
+    "Agility": 43.0,
+    "Strength": 46.0,
+    "Intellect": 67.0,
+    "Spirit": 72.0,
+    "Stamina": 49.0
+   },
+   "50": {
+    "Health": 1038.0,
+    "Mana": 1064.0,
+    "Agility": 51.0,
+    "Strength": 55.0,
+    "Intellect": 82.0,
+    "Spirit": 90.0,
+    "Stamina": 59.0
+   },
+   "60": {
+    "Health": 1483.0,
+    "Mana": 1244.0,
+    "Agility": 60.0,
+    "Strength": 65.0,
+    "Intellect": 100.0,
+    "Spirit": 110.0,
+    "Stamina": 70.0
+   }
+  }
+ },
+ "race_offsets": {
+  "1": {},
+  "2": {
+   "Agility": -3.0,
+   "Strength": 3.0,
+   "Intellect": -3.0,
+   "Spirit": 3.0,
+   "Stamina": 2.0
+  },
+  "3": {
+   "Agility": -4.0,
+   "Strength": 2.0,
+   "Intellect": -1.0,
+   "Spirit": -1.0,
+   "Stamina": 3.0
+  },
+  "4": {
+   "Agility": 5.0,
+   "Strength": -3.0,
+   "Intellect": 0.0,
+   "Spirit": 0.0,
+   "Stamina": -1.0
+  },
+  "5": {
+   "Agility": -2.0,
+   "Strength": -1.0,
+   "Intellect": -2.0,
+   "Spirit": 5.0,
+   "Stamina": 1.0
+  },
+  "6": {
+   "Agility": -5.0,
+   "Strength": 5.0,
+   "Intellect": -5.0,
+   "Spirit": 2.0,
+   "Stamina": 2.0
+  },
+  "7": {
+   "Agility": 3.0,
+   "Strength": -5.0,
+   "Intellect": 3.0,
+   "Spirit": 0.0,
+   "Stamina": -1.0
+  },
+  "8": {
+   "Agility": 2.0,
+   "Strength": 1.0,
+   "Intellect": -4.0,
+   "Spirit": 1.0,
+   "Stamina": 1.0
+  }
+ },
+ "class_base_crit": {
+  "1": {
+   "SpellCrit": 0.0,
+   "MeleeCrit": 0.0,
+   "Dodge": 0.0
+  },
+  "2": {
+   "SpellCrit": 3.5,
+   "MeleeCrit": 0.7,
+   "Dodge": 0.7
+  },
+  "3": {
+   "SpellCrit": 3.6,
+   "MeleeCrit": 0.0,
+   "Dodge": 0.0
+  },
+  "4": {
+   "SpellCrit": 0.0,
+   "MeleeCrit": 0.0,
+   "Dodge": 0.0
+  },
+  "5": {
+   "SpellCrit": 0.8,
+   "MeleeCrit": 3.0,
+   "Dodge": 3.0
+  },
+  "7": {
+   "SpellCrit": 2.3,
+   "MeleeCrit": 1.7,
+   "Dodge": 1.7
+  },
+  "8": {
+   "SpellCrit": 0.2,
+   "MeleeCrit": 3.2,
+   "Dodge": 3.2
+  },
+  "9": {
+   "SpellCrit": 1.7,
+   "MeleeCrit": 2.0,
+   "Dodge": 2.0
+  },
+  "11": {
+   "SpellCrit": 1.8,
+   "MeleeCrit": 0.9,
+   "Dodge": 0.9
+  }
+ },
+ "crit_per_agi_pct": {
+  "1": {
+   "25": 0.1111,
+   "40": 0.0758,
+   "50": 0.061,
+   "60": 0.05
+  },
+  "2": {
+   "25": 0.1075,
+   "40": 0.0741,
+   "50": 0.0606,
+   "60": 0.0506
+  },
+  "3": {
+   "25": 0.0515,
+   "40": 0.0303,
+   "50": 0.0234,
+   "60": 0.0189
+  },
+  "4": {
+   "25": 0.0952,
+   "40": 0.0556,
+   "50": 0.0427,
+   "60": 0.0345
+  },
+  "5": {
+   "25": 0.0769,
+   "40": 0.0645,
+   "50": 0.0571,
+   "60": 0.05
+  },
+  "7": {
+   "25": 0.0971,
+   "40": 0.0717,
+   "50": 0.06,
+   "60": 0.0508
+  },
+  "8": {
+   "25": 0.072,
+   "40": 0.0621,
+   "50": 0.0563,
+   "60": 0.0514
+  },
+  "9": {
+   "25": 0.0909,
+   "40": 0.0698,
+   "50": 0.0588,
+   "60": 0.05
+  },
+  "11": {
+   "25": 0.1025,
+   "40": 0.0719,
+   "50": 0.0594,
+   "60": 0.05
+  }
+ },
+ "spell_crit_per_int_pct": {
+  "1": {
+   "25": 0.0,
+   "40": 0.0,
+   "50": 0.0,
+   "60": 0.0
+  },
+  "2": {
+   "25": 0.0357,
+   "40": 0.0246,
+   "50": 0.02,
+   "60": 0.0167
+  },
+  "3": {
+   "25": 0.035,
+   "40": 0.0241,
+   "50": 0.0197,
+   "60": 0.0165
+  },
+  "4": {
+   "25": 0.0,
+   "40": 0.0,
+   "50": 0.0,
+   "60": 0.0
+  },
+  "5": {
+   "25": 0.0457,
+   "40": 0.0269,
+   "50": 0.0208,
+   "60": 0.0168
+  },
+  "7": {
+   "25": 0.0422,
+   "40": 0.0262,
+   "50": 0.0208,
+   "60": 0.0169
+  },
+  "8": {
+   "25": 0.0475,
+   "40": 0.0276,
+   "50": 0.0211,
+   "60": 0.0168
+  },
+  "9": {
+   "25": 0.0429,
+   "40": 0.0262,
+   "50": 0.0204,
+   "60": 0.0165
+  },
+  "11": {
+   "25": 0.0427,
+   "40": 0.026,
+   "50": 0.0205,
+   "60": 0.0167
+  }
+ },
+ "dodge_per_agi_pct": {
+  "1": {
+   "25": 0.1111,
+   "40": 0.0758,
+   "50": 0.061,
+   "60": 0.05
+  },
+  "2": {
+   "25": 0.1075,
+   "40": 0.0741,
+   "50": 0.0606,
+   "60": 0.0506
+  },
+  "3": {
+   "25": 0.103,
+   "40": 0.0606,
+   "50": 0.0468,
+   "60": 0.0378
+  },
+  "4": {
+   "25": 0.1904,
+   "40": 0.1112,
+   "50": 0.0854,
+   "60": 0.069
+  },
+  "5": {
+   "25": 0.0769,
+   "40": 0.0645,
+   "50": 0.0571,
+   "60": 0.05
+  },
+  "7": {
+   "25": 0.0971,
+   "40": 0.0717,
+   "50": 0.06,
+   "60": 0.0508
+  },
+  "8": {
+   "25": 0.072,
+   "40": 0.0621,
+   "50": 0.0563,
+   "60": 0.0514
+  },
+  "9": {
+   "25": 0.0909,
+   "40": 0.0698,
+   "50": 0.0588,
+   "60": 0.05
+  },
+  "11": {
+   "25": 0.1025,
+   "40": 0.0719,
+   "50": 0.0594,
+   "60": 0.05
+  }
+ }
+}

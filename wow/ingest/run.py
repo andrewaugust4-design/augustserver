@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sqlite3
 import sys
 from collections import Counter
 from datetime import datetime, timezone
@@ -21,7 +22,8 @@ from common import icons
 from common.armor import ARMOR_TABLES
 from common.constants import CLASSIC_ERA_PRODUCT, FOREVER_PRODUCT
 
-from . import wago_client
+from . import validate_character, wago_client
+from .character_data import CHARACTER_TABLES, load_character_data
 from .normalize import diff_items, load_armor_tables, load_budgets, parse_build, write_db
 from .validate import ValidationError, validate
 
@@ -32,7 +34,7 @@ CACHE_DIR = DATA_DIR / "raw"
 DB_PATH = DATA_DIR / "wow.db"
 
 TABLES = ("Item", "ItemSparse")
-FOREVER_ONLY_TABLES = ("RandPropPoints", *ARMOR_TABLES)
+FOREVER_ONLY_TABLES = ("RandPropPoints", *ARMOR_TABLES, *CHARACTER_TABLES)
 
 
 def main() -> None:
@@ -104,8 +106,20 @@ def main() -> None:
         "unchanged_count": str(counts.get("unchanged", 0)),
         **validation_meta,
     }
-    write_db(DB_PATH, meta, merged, budgets)
+    character = load_character_data(CACHE_DIR / forever_version)
+    write_db(DB_PATH, meta, merged, budgets, character)
     log.info("Ingest complete: %s", meta)
+
+    # Set-builder sheet cross-checks: logged, never blocking (see validate_character.py).
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        char_summary = validate_character.run(conn, emit=log.info)
+        with conn:
+            conn.executemany("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", char_summary.items())
+    except Exception:
+        log.exception("Character sheet validation crashed (the refresh itself succeeded)")
+    finally:
+        conn.close()
 
     if args.warm_icons:
         if not icons.enabled():

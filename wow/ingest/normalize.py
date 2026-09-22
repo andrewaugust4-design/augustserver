@@ -18,6 +18,7 @@ from common.constants import (
     WEAPON_SUBCLASS_NAMES,
 )
 from common.stats import CLASSIC_RESISTANCE_COLUMN_TO_STAT, stat_budget, stat_info, stat_value
+from . import character_data
 from .wago_client import read_csv
 
 
@@ -34,6 +35,22 @@ def load_armor_tables(build_dir: Path) -> dict[str, dict[int, dict]]:
         "location": {int(r["ID"]): r for r in read_csv(build_dir / "ArmorLocation.csv")},
         "shield": {int(r["ItemLevel"]): r for r in read_csv(build_dir / "ItemArmorShield.csv")},
     }
+
+
+UNIQUE_EQUIPPED_FLAG = 0x80000  # ItemSparse.Flags_0; MaxCount == 1 ("Unique") also blocks a second copy
+
+
+def _race_mask(row: dict) -> int:
+    """AllowableRace as one signed 64-bit int. Forever splits the mask into
+    two signed 32-bit halves (AllowableRace_0/_1) because the Skyborne races
+    sit on PlayableRaceBit 32/33; -1 in both = every race. Kept signed so it
+    fits SQLite's INTEGER; `mask & (1 << bit)` still works for bits 0-63."""
+    if "AllowableRace_0" not in row:
+        return int(row.get("AllowableRace") or -1)  # Classic Era: single 32-bit column
+    lo = int(row["AllowableRace_0"] or -1) & 0xFFFFFFFF
+    hi = int(row.get("AllowableRace_1") or -1) & 0xFFFFFFFF
+    mask = (hi << 32) | lo
+    return mask - (1 << 64) if mask >= 1 << 63 else mask
 
 
 def _stat(stat_id: int, value: int | None, **extra) -> dict:
@@ -130,6 +147,7 @@ def parse_build(item_csv: Path, itemsparse_csv: Path, *, budgets: dict[int, dict
             material = ARMOR_MATERIAL_NAMES.get(item_subclass)  # None for misc/shield/relic slots
 
         item_id = int(row["ID"])
+        unique = int(row.get("MaxCount") or 0) == 1 or bool(int(row.get("Flags_0") or 0) & UNIQUE_EQUIPPED_FLAG)
         out[item_id] = {
             "id": item_id,
             "name": name,
@@ -141,6 +159,8 @@ def parse_build(item_csv: Path, itemsparse_csv: Path, *, budgets: dict[int, dict
             "material": material,
             "required_level": int(row.get("RequiredLevel") or 0),
             "allowable_class_mask": allowable_class_mask,
+            "allowable_race_mask": _race_mask(row),
+            "unique_equipped": unique,
             "item_level": item_level,
             "stats": stats,
             "armor": armor,
@@ -196,6 +216,8 @@ CREATE TABLE items (
     material TEXT,
     required_level INTEGER NOT NULL,
     allowable_class_mask INTEGER NOT NULL,
+    allowable_race_mask INTEGER NOT NULL,
+    unique_equipped INTEGER NOT NULL,
     item_level INTEGER NOT NULL,
     change_status TEXT NOT NULL,
     stats_json TEXT NOT NULL,
@@ -221,7 +243,8 @@ CREATE TABLE rand_prop_points (
 BUDGET_COLUMNS = [f"{family}_{i}" for family in ("Epic", "Superior", "Good") for i in range(5)]
 
 
-def write_db(db_path: Path, meta: dict[str, str], items: dict[int, dict], budgets: dict[int, dict]) -> None:
+def write_db(db_path: Path, meta: dict[str, str], items: dict[int, dict], budgets: dict[int, dict],
+             character: dict[str, list[tuple]] | None = None) -> None:
     """Rebuild the DB contents in a single transaction, so the running app
     never sees a half-written items table."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -236,16 +259,18 @@ def write_db(db_path: Path, meta: dict[str, str], items: dict[int, dict], budget
             INSERT INTO items (
                 id, name, quality, item_class, item_subclass, inventory_type,
                 slot, material, required_level, allowable_class_mask,
+                allowable_race_mask, unique_equipped,
                 item_level, change_status, stats_json,
                 classic_stats_json, classic_item_level, diff_json,
                 armor, classic_armor
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
                     it["id"], it["name"], it["quality"], it["item_class"], it["item_subclass"],
                     it["inventory_type"], it["slot"], it["material"], it["required_level"],
-                    it["allowable_class_mask"], it["item_level"], it["change_status"],
+                    it["allowable_class_mask"], it["allowable_race_mask"], int(it["unique_equipped"]),
+                    it["item_level"], it["change_status"],
                     json.dumps(it["stats"]),
                     json.dumps(it["classic_stats"]) if "classic_stats" in it else None,
                     it.get("classic_item_level"),
@@ -262,6 +287,8 @@ def write_db(db_path: Path, meta: dict[str, str], items: dict[int, dict], budget
                 for ilvl, row in sorted(budgets.items())
             ],
         )
+        if character is not None:
+            character_data.write_tables(conn, character)
         conn.executemany(
             "INSERT INTO meta (key, value) VALUES (?, ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
