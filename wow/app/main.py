@@ -14,6 +14,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
+from common import icons
 from common.constants import CLASS_BY_SLUG, CLASSES, SLOT_BY_SLUG, SLOTS
 from common.proficiency import can_equip
 
@@ -22,6 +23,7 @@ from . import db
 app = FastAPI(title="WoW: Forever", docs_url=None, redoc_url=None)
 
 STATIC_DIR = Path(__file__).parent / "static"
+PLACEHOLDER_ICON = STATIC_DIR / "icon-placeholder.svg"
 
 
 def _public_stats(stats: list[dict], debug: bool) -> list[dict]:
@@ -57,6 +59,29 @@ async def gear_redirect() -> RedirectResponse:
 @app.get("/gear/")
 async def gear_index() -> FileResponse:
     return FileResponse(STATIC_DIR / "gear" / "index.html")
+
+
+@app.get("/icon-placeholder.svg")
+async def placeholder_icon() -> FileResponse:
+    return FileResponse(PLACEHOLDER_ICON, headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/api/icon/{name}")
+def item_icon(name: str) -> FileResponse:
+    """Self-hosted item icon: /api/icon/<id> or /api/icon/<id>.jpg (the
+    frontend uses .jpg so Cloudflare caches it without a custom rule).
+    Sync def on purpose — a cold miss blocks on Blizzard, so it runs in the
+    threadpool. Unknown/missing icons get the placeholder with a short TTL
+    so they're re-checked once Blizzard publishes them."""
+    item_id = name.removesuffix(".jpg")
+    if not item_id.isdigit():
+        raise HTTPException(status_code=404, detail="Not found.")
+    path = icons.get(int(item_id))
+    if path is None:
+        return FileResponse(PLACEHOLDER_ICON, media_type="image/svg+xml",
+                            headers={"Cache-Control": "public, max-age=3600"})
+    return FileResponse(path, media_type="image/jpeg",
+                        headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 @app.get("/api/health")

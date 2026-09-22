@@ -110,6 +110,62 @@ separate dual-wield proficiency, so a class that can use e.g. daggers will
 see dagger results under "Off Hand" even if equipping there actually
 requires a talent/passive in-game.
 
+## Item icons
+
+Icons are **self-hosted**: `GET /api/icon/<itemId>.jpg` serves
+`data/icons/<itemId>.jpg` if it's on disk (`Cache-Control: immutable`, and the
+`.jpg` suffix lets Cloudflare cache it with no custom rule); on a miss it
+asks Blizzard's item media API (`/data/wow/media/item/<id>`) for the icon
+URL, downloads it once, and serves it from disk from then on. See
+`common/icons.py` and `common/blizzard.py`.
+
+We don't resolve icons from the datamine: in the Forever beta the
+`Item → ItemDisplayInfo → icon FileDataID` chain isn't reliably readable yet.
+The media API does the id→icon lookup server-side instead.
+
+- **Missing icons** (the API 404s, which is most Forever-only ids during
+  beta) get the bundled `app/static/icon-placeholder.svg` with a 1h TTL, and
+  a row in `data/icons/missing.db`. That item isn't retried for 24h, so
+  coverage fills in over the beta without hitting the API on every view.
+  Network/5xx errors are *not* negative-cached.
+- **Warm:** `python -m ingest.run --warm-icons` pre-fetches every uncached
+  icon after the ingest, highest ilvl first, at 5 items/s. It's resumable,
+  because anything on disk or recently missing is skipped.
+  `wow-refresh.service` runs with this flag.
+- **No keys → no problem:** without `BLIZZARD_CLIENT_ID`/`SECRET` the app
+  logs one warning and serves placeholders everywhere.
+
+### `.env` keys
+
+| Key | Default | |
+|---|---|---|
+| `BLIZZARD_CLIENT_ID`, `BLIZZARD_CLIENT_SECRET` | *(unset → placeholders)* | free client from develop.battle.net |
+| `BLIZZARD_REGION` | `us` | API host + namespace suffix |
+| `BLIZZARD_ITEM_MEDIA_NAMESPACE` | `static-classic1x-<region>` | from the probe below |
+| `WOW_ICON_DIR` | `data/icons` (→ `/opt/wow/data/icons`) | under the unit's `ReadWritePaths` |
+
+### Namespace probe
+
+There's **no Forever namespace**. Blizzard doesn't expose beta/PTR data, and
+every guessed Forever-ish name 403s exactly like a made-up one.
+`python -m ingest.probe_icons` samples 50 carryover + 50 Forever-only items
+per candidate. On 2026-09-22 (seed 1):
+
+| namespace | carryover | new (Forever-only) |
+|---|---|---|
+| `static-classic1x-us` (Era) | **44/50** | 1/50 |
+| `static-classic-us` (progression) | 42/50 | 1/50 |
+| `static-us` (retail) | 38/50 | 2/50 |
+| `static-classicforever-us`, `static-forever-us`, … | no such ns | no such ns |
+
+The carryover misses are mostly deprecated/test items. So today ~88% of
+carryover items and only ~2% of new items get a real icon: roughly
+two-thirds of the 7.7k items overall. The ~2,000 new items show the
+placeholder until Blizzard publishes a Forever namespace (likely at launch).
+When that happens, re-run the probe and set `BLIZZARD_ITEM_MEDIA_NAMESPACE`.
+Retail's one extra new-item hit was a genuine match (same name), so a
+name-checked retail fallback is a possible later improvement.
+
 ## Refreshing the data
 
 ```

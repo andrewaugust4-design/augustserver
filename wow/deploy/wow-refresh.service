@@ -18,5 +18,5 @@ User=www-data
 Group=www-data
 WorkingDirectory=/opt/wow
 EnvironmentFile=/opt/wow/.env
-ExecStart=/opt/wow/venv/bin/python -m ingest.run
+ExecStart=/opt/wow/venv/bin/python -m ingest.run --warm-icons
 ReadWritePaths=/opt/wow/data

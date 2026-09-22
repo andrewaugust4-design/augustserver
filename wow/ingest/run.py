@@ -1,7 +1,7 @@
 """CLI entrypoint: refresh /opt/wow/data/wow.db from the latest wago.tools
 Forever beta + Classic Era builds.
 
-    python -m ingest.run [--force]
+    python -m ingest.run [--force] [--warm-icons]
 
 Run once by hand after first deploy to populate the DB, then scheduled daily
 by wow-refresh.timer (see deploy/). Idempotent: re-running on an unchanged
@@ -17,6 +17,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
+from common import icons
 from common.constants import CLASSIC_ERA_PRODUCT, FOREVER_PRODUCT
 
 from . import wago_client
@@ -36,6 +37,8 @@ FOREVER_ONLY_TABLES = ("RandPropPoints",)
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--force", action="store_true", help="re-download CSVs even if cached")
+    parser.add_argument("--warm-icons", action="store_true",
+                        help="after ingest, pre-fetch item icons that aren't cached yet (needs Blizzard API keys)")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -101,6 +104,15 @@ def main() -> None:
     }
     write_db(DB_PATH, meta, merged, budgets)
     log.info("Ingest complete: %s", meta)
+
+    if args.warm_icons:
+        if not icons.enabled():
+            log.warning("--warm-icons: Blizzard credentials not set, skipping.")
+        else:
+            # Highest ilvl first — those are the items people browse most.
+            item_ids = [it["id"] for it in sorted(merged.values(), key=lambda it: -it["item_level"])]
+            log.info("Warming icons for %d items into %s", len(item_ids), icons.ICON_DIR)
+            log.info("Icon warm done: %s", icons.warm(item_ids))
 
 
 if __name__ == "__main__":

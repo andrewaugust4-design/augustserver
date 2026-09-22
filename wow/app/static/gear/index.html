@@ -88,7 +88,22 @@
   }
   .slot-btn:hover { color: var(--ink); border-color: var(--gold-dim); }
   .slot-btn.active { color: var(--gold); border-color: var(--gold); }
-  .weapon-row .slot-btn { flex: 1; min-width: 120px; text-align: center; }
+  .weapon-row .slot-btn { flex: 1; min-width: 120px; }
+  .slot-btn { display: flex; align-items: center; gap: 0.6rem; }
+  .slot-btn .slot-text { display: flex; flex-direction: column; min-width: 0; }
+  .slot-btn .slot-item { font-family: var(--sans); font-size: 0.74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* item icons: placeholder shows underneath while loading / when missing */
+  .icon {
+    flex: none; width: 32px; height: 32px; border-radius: 5px;
+    border: 2px solid var(--q, var(--panel-edge));
+    background: url(../icon-placeholder.svg) center / cover;
+    box-shadow: 0 0 6px -2px var(--q, transparent);
+    object-fit: cover;
+  }
+  .icon.lg { width: 48px; height: 48px; border-radius: 7px; }
+  .detail-head { display: flex; align-items: center; gap: 0.8rem; margin-bottom: 0.9rem; }
+  .detail-head .detail-meta { margin-bottom: 0; }
 
   /* item list */
   .item-list { display: flex; flex-direction: column; gap: 0.35rem; }
@@ -187,7 +202,19 @@
 <script>
 const QUALITY_COLORS = {0:'#9d9d9d',1:'#ffffff',2:'#1eff00',3:'#0070dd',4:'#a335ee',5:'#ff8000',6:'#e6cc80',7:'#00ccff'};
 
-const state = { classes: [], slots: [], selectedClass: null, selectedSlot: null };
+const PLACEHOLDER_ICON = '../icon-placeholder.svg';
+
+// Last item opened per paperdoll slot (reset on class change).
+const state = { classes: [], slots: [], selectedClass: null, selectedSlot: null, picked: {} };
+
+// Self-hosted icon (see /api/icon) with a quality-colored frame. Lazy so a
+// long slot list doesn't fire hundreds of requests at once.
+function iconImg(id, quality, size = '') {
+  const q = QUALITY_COLORS[quality];
+  const src = id ? `../api/icon/${id}.jpg` : PLACEHOLDER_ICON;
+  return `<img class="icon ${size}" src="${src}" alt="" loading="lazy" style="${q ? '--q:' + q : ''}" ` +
+         `onerror="this.onerror=null;this.src='${PLACEHOLDER_ICON}'">`;
+}
 
 async function api(path) {
   const res = await fetch('../api/' + path);
@@ -242,7 +269,13 @@ function renderPaperdoll() {
   const rightCol = ['hands', 'waist', 'legs', 'feet', 'finger', 'trinket'];
   const weaponRow = ['relic', 'mainhand', 'offhand', 'ranged'];
 
-  const slotBtn = slug => `<button class="slot-btn" data-slug="${slug}">${bySlug[slug].label}</button>`;
+  const slotBtn = slug => {
+    const it = state.picked[slug];
+    return `<button class="slot-btn${slug === state.selectedSlot ? ' active' : ''}" data-slug="${slug}">
+      ${it ? iconImg(it.id, it.quality) : iconImg(null)}
+      <span class="slot-text">${bySlug[slug].label}${it ? `<span class="slot-item" style="color:${QUALITY_COLORS[it.quality] || '#fff'}">${it.name}</span>` : ''}</span>
+    </button>`;
+  };
 
   document.getElementById('paperdoll').innerHTML = `
     <div class="paperdoll-col">${leftCol.map(slotBtn).join('')}</div>
@@ -257,6 +290,7 @@ function renderPaperdoll() {
 function selectClass(slug) {
   state.selectedClass = slug;
   state.selectedSlot = null;
+  state.picked = {};
   document.querySelectorAll('.class-btn').forEach(b => b.classList.toggle('active', b.dataset.slug === slug));
   document.getElementById('paperdollSection').style.display = 'block';
   document.getElementById('resultsSection').style.display = 'none';
@@ -299,6 +333,7 @@ function itemRow(item) {
   if (item.change_status === 'changed') badge = `<span class="badge changed" data-id="${item.id}">Changed</span>`;
   return `
     <div class="item-row">
+      ${iconImg(item.id, item.quality)}
       <button class="item-name" style="color:${color}" data-id="${item.id}">${item.name}</button>
       <span class="item-ilvl">ilvl ${item.item_level}${item.required_level ? ' · req ' + item.required_level : ''}</span>
       ${badge}
@@ -318,6 +353,8 @@ async function showDetail(id) {
   }
 
   const color = QUALITY_COLORS[item.quality] || '#fff';
+  state.picked[state.selectedSlot] = { id: item.id, name: item.name, quality: item.quality };
+  renderPaperdoll();
   const statsHtml = item.stats.length
     ? `<ul class="stat-list">${statItems(item.stats)}</ul>`
     : '<p class="hint-note" style="padding:0 0 0.8rem;">No stats on this item.</p>';
@@ -327,11 +364,16 @@ async function showDetail(id) {
   results.innerHTML = `
     <div class="detail-panel">
       <button class="detail-back" id="detailBack">‹ Back to items</button>
-      <div class="detail-name" style="color:${color}">${item.name}</div>
-      <div class="detail-meta">
-        ilvl ${item.item_level}${item.required_level ? ' · requires level ' + item.required_level : ''}
-        ${item.material ? ' · ' + item.material : ''}
-        ${item.change_status !== 'unchanged' ? ' · <span style="color:var(--gold)">' + item.change_status + ' vs Classic Era</span>' : ''}
+      <div class="detail-head">
+        ${iconImg(item.id, item.quality, 'lg')}
+        <div>
+          <div class="detail-name" style="color:${color}">${item.name}</div>
+          <div class="detail-meta">
+            ilvl ${item.item_level}${item.required_level ? ' · requires level ' + item.required_level : ''}
+            ${item.material ? ' · ' + item.material : ''}
+            ${item.change_status !== 'unchanged' ? ' · <span style="color:var(--gold)">' + item.change_status + ' vs Classic Era</span>' : ''}
+          </div>
+        </div>
       </div>
       ${statsHtml}
       <div class="obtain-box">${obtain}</div>
