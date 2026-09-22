@@ -1,0 +1,30 @@
+# Install: sudo cp deploy/wow.service /etc/systemd/system/
+# Then:    sudo systemctl daemon-reload && sudo systemctl enable --now wow
+#
+# Assumes the project lives at /opt/wow with a venv at /opt/wow/venv, and
+# that data/wow.db already exists (run `python -m ingest.run` once first —
+# see deploy/wow-refresh.service for the recurring version).
+
+[Unit]
+Description=WoW: Forever suite (augustserver.com/wow)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/wow
+EnvironmentFile=/opt/wow/.env
+ExecStart=/opt/wow/venv/bin/uvicorn app.main:app \
+    --host 127.0.0.1 --port 8065 --root-path /wow
+Restart=on-failure
+RestartSec=5
+
+# Hardening (optional but cheap)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/opt/wow/data
+
+[Install]
+WantedBy=multi-user.target

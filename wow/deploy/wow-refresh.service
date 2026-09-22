@@ -1,0 +1,22 @@
+# Install: sudo cp deploy/wow-refresh.service deploy/wow-refresh.timer /etc/systemd/system/
+# Then:    sudo systemctl daemon-reload && sudo systemctl enable --now wow-refresh.timer
+#
+# One-shot ingest run: pulls the latest Forever beta + Classic Era builds
+# from wago.tools, diffs them, and rewrites /opt/wow/data/wow.db. Also run
+# this manually once right after first deploy, before starting wow.service,
+# so the DB isn't empty:
+#   sudo -u www-data /opt/wow/venv/bin/python -m ingest.run
+
+[Unit]
+Description=Refresh WoW: Forever item data from wago.tools
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/wow
+EnvironmentFile=/opt/wow/.env
+ExecStart=/opt/wow/venv/bin/python -m ingest.run
+ReadWritePaths=/opt/wow/data
