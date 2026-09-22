@@ -9,6 +9,7 @@ import json
 import sqlite3
 from pathlib import Path
 
+from common.armor import item_armor
 from common.constants import (
     ARMOR_MATERIAL_NAMES,
     INVTYPE_TO_SLOT,
@@ -25,6 +26,16 @@ def load_budgets(randproppoints_csv: Path) -> dict[int, dict]:
     return {int(row["ID"]): row for row in read_csv(randproppoints_csv)}
 
 
+def load_armor_tables(build_dir: Path) -> dict[str, dict[int, dict]]:
+    """The four armor DB2s common/armor.py computes base armor from."""
+    return {
+        "total": {int(r["ItemLevel"]): r for r in read_csv(build_dir / "ItemArmorTotal.csv")},
+        "quality": {int(r["ID"]): r for r in read_csv(build_dir / "ItemArmorQuality.csv")},
+        "location": {int(r["ID"]): r for r in read_csv(build_dir / "ArmorLocation.csv")},
+        "shield": {int(r["ItemLevel"]): r for r in read_csv(build_dir / "ItemArmorShield.csv")},
+    }
+
+
 def _stat(stat_id: int, value: int | None, **extra) -> dict:
     name, category = stat_info(stat_id)
     return {"stat_id": stat_id, "name": name, "category": category, "value": value, **extra}
@@ -32,7 +43,8 @@ def _stat(stat_id: int, value: int | None, **extra) -> dict:
 DIFF_FIELDS = ("name", "quality", "slot", "material", "required_level", "item_level")
 
 
-def parse_build(item_csv: Path, itemsparse_csv: Path, *, budgets: dict[int, dict] | None = None) -> dict[int, dict]:
+def parse_build(item_csv: Path, itemsparse_csv: Path, *, budgets: dict[int, dict] | None = None,
+                armor_tables: dict[str, dict[int, dict]] | None = None) -> dict[int, dict]:
     """Parse one build's Item + ItemSparse CSVs into {item_id: record}.
 
     Classic Era (`budgets` is None) stores real stat numbers in
@@ -42,6 +54,9 @@ def parse_build(item_csv: Path, itemsparse_csv: Path, *, budgets: dict[int, dict
     item's RandPropPoints budget (see common/stats.py). Forever stats keep
     the raw weight as `weight_bp` for debugging; value is None when the
     item has no budget (unknown slot/quality/level).
+
+    Base armor likewise: Classic Era stores it (Resistances_0), Forever
+    (`armor_tables` = load_armor_tables(...)) computes it — common/armor.py.
     """
     items_by_id = {row["ID"]: row for row in read_csv(item_csv)}
     out: dict[int, dict] = {}
@@ -101,6 +116,14 @@ def parse_build(item_csv: Path, itemsparse_csv: Path, *, budgets: dict[int, dict
                 if amount:
                     stats.append(_stat(stat_id, amount))
 
+        armor = None
+        if item_class == ITEM_CLASS_ARMOR:
+            if armor_tables is None:
+                armor = int(row.get("Resistances_0") or 0) or None
+            else:
+                armor = item_armor(armor_tables, quality=quality, item_level=item_level,
+                                   inventory_type=inventory_type, item_subclass=item_subclass)
+
         if item_class == ITEM_CLASS_WEAPON:
             material = WEAPON_SUBCLASS_NAMES.get(item_subclass)
         else:
@@ -120,6 +143,7 @@ def parse_build(item_csv: Path, itemsparse_csv: Path, *, budgets: dict[int, dict
             "allowable_class_mask": allowable_class_mask,
             "item_level": item_level,
             "stats": stats,
+            "armor": armor,
         }
 
     return out
@@ -149,6 +173,7 @@ def diff_items(forever_items: dict[int, dict], classic_items: dict[int, dict]) -
             record["diff"] = diff or None
             record["classic_stats"] = c_item["stats"]
             record["classic_item_level"] = c_item["item_level"]
+            record["classic_armor"] = c_item["armor"]
         merged[item_id] = record
     return merged
 
@@ -176,7 +201,9 @@ CREATE TABLE items (
     stats_json TEXT NOT NULL,
     classic_stats_json TEXT,
     classic_item_level INTEGER,
-    diff_json TEXT
+    diff_json TEXT,
+    armor INTEGER,
+    classic_armor INTEGER
 );
 
 CREATE INDEX idx_items_slot ON items(slot);
@@ -210,8 +237,9 @@ def write_db(db_path: Path, meta: dict[str, str], items: dict[int, dict], budget
                 id, name, quality, item_class, item_subclass, inventory_type,
                 slot, material, required_level, allowable_class_mask,
                 item_level, change_status, stats_json,
-                classic_stats_json, classic_item_level, diff_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                classic_stats_json, classic_item_level, diff_json,
+                armor, classic_armor
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -222,6 +250,7 @@ def write_db(db_path: Path, meta: dict[str, str], items: dict[int, dict], budget
                     json.dumps(it["classic_stats"]) if "classic_stats" in it else None,
                     it.get("classic_item_level"),
                     json.dumps(it["diff"]) if it.get("diff") else None,
+                    it["armor"], it.get("classic_armor"),
                 )
                 for it in items.values()
             ],

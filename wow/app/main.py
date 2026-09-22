@@ -107,6 +107,7 @@ async def meta() -> dict:
         "unchanged_count": int(m.get("unchanged_count", 0)),
         "stat_match_rate": float(m["stat_match_rate"]) if m.get("stat_match_rate") else None,
         "stat_match_sample": int(m.get("stat_match_sample", 0)),
+        "armor_match_rate": float(m["armor_match_rate"]) if m.get("armor_match_rate") else None,
     }
 
 
@@ -164,9 +165,11 @@ async def item_detail(item_id: int, debug: bool = False) -> dict:
         "allowable_class_mask": row["allowable_class_mask"],
         "item_level": row["item_level"],
         "change_status": row["change_status"],
+        "armor": row["armor"],
         "stats": _public_stats(json.loads(row["stats_json"]), debug),
         "classic_stats": json.loads(row["classic_stats_json"]) if row["classic_stats_json"] else None,
         "classic_item_level": row["classic_item_level"],
+        **({"classic_armor": row["classic_armor"]} if debug else {}),
         "diff": [
             {**d, "forever": _public_stats(d["forever"], debug)} if d["field"] == "stats" else d
             for d in json.loads(row["diff_json"])

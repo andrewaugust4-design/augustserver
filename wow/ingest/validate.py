@@ -20,11 +20,15 @@ from common.stats import PRIMARY_STAT_IDS, RESISTANCE_STAT_IDS, STAT_INFO
 log = logging.getLogger("wow.ingest")
 
 MIN_MATCH_RATE = 0.95
+# Base armor (common/armor.py) matched 99.25% on 2026-09-22; misses are
+# hand-set armor on rings/necks/off-hands. 92% is where foreverchanges sits.
+MIN_ARMOR_MATCH_RATE = 0.92
 
 # Fiery Slippers (rare feet, ilvl 35 -> Superior_1 budget 15): the reference
 # tooltip is +7 Int, +6 Stam, +4 Spirit, Equip: +13 fire spell damage.
 ANCHOR_ITEM_ID = 254005
 ANCHOR_EXPECTED = {5: 7, 7: 6, 6: 4, 85: 13}
+ANCHOR_ARMOR = 35  # cloth feet, ilvl 35, rare: 290.33 × 0.11 × 1.1
 
 
 class ValidationError(RuntimeError):
@@ -47,6 +51,17 @@ def _match_counts(items: dict[int, dict], status: str, stat_ids: frozenset[int] 
     return matched, total
 
 
+def _armor_counts(items: dict[int, dict], status: str) -> tuple[int, int]:
+    """Items where either build has base armor, and how many agree exactly."""
+    matched = total = 0
+    for item in items.values():
+        if item["change_status"] != status or not (item["armor"] or item.get("classic_armor")):
+            continue
+        total += 1
+        matched += item["armor"] == item.get("classic_armor")
+    return matched, total
+
+
 def _rate(matched: int, total: int) -> float:
     return matched / total if total else 0.0
 
@@ -62,6 +77,13 @@ def validate(items: dict[int, dict]) -> dict[str, str]:
         report[label] = (m, t)
     m, t = _match_counts(items, "changed", None)
     log.info("Stat formula check (changed items, informational): %d/%d match Classic Era (%.2f%%)",
+             m, t, 100 * _rate(m, t))
+
+    armor_m, armor_t = _armor_counts(items, "unchanged")
+    log.info("Armor formula check (unchanged items): %d/%d match Classic Era (%.2f%%)",
+             armor_m, armor_t, 100 * _rate(armor_m, armor_t))
+    m, t = _armor_counts(items, "changed")
+    log.info("Armor formula check (changed items, informational): %d/%d match Classic Era (%.2f%%)",
              m, t, 100 * _rate(m, t))
 
     no_budget = sum(1 for it in items.values() if any(s["value"] is None for s in it["stats"]))
@@ -84,7 +106,10 @@ def validate(items: dict[int, dict]) -> dict[str, str]:
         got = {s["stat_id"]: s["value"] for s in anchor["stats"]}
         if got != ANCHOR_EXPECTED:
             raise ValidationError(f"Anchor item {ANCHOR_ITEM_ID} ({anchor['name']}) computed {got}, expected {ANCHOR_EXPECTED}")
-        log.info("Anchor item %d (%s) matches: %s", ANCHOR_ITEM_ID, anchor["name"], got)
+        if anchor["armor"] != ANCHOR_ARMOR:
+            raise ValidationError(f"Anchor item {ANCHOR_ITEM_ID} ({anchor['name']}) computed armor "
+                                  f"{anchor['armor']}, expected {ANCHOR_ARMOR}")
+        log.info("Anchor item %d (%s) matches: %s, armor %d", ANCHOR_ITEM_ID, anchor["name"], got, anchor["armor"])
 
     m, t = report["primary"]
     if _rate(m, t) < MIN_MATCH_RATE:
@@ -92,5 +117,15 @@ def validate(items: dict[int, dict]) -> dict[str, str]:
             f"Only {m}/{t} ({100 * _rate(m, t):.2f}%) primary stats on unchanged items match Classic Era "
             f"(need {100 * MIN_MATCH_RATE:.0f}%) — RandPropPoints selection may be wrong; refusing to write."
         )
+    if _rate(armor_m, armor_t) < MIN_ARMOR_MATCH_RATE:
+        raise ValidationError(
+            f"Only {armor_m}/{armor_t} ({100 * _rate(armor_m, armor_t):.2f}%) armor values on unchanged items match "
+            f"Classic Era (need {100 * MIN_ARMOR_MATCH_RATE:.0f}%) — armor table selection may be wrong; refusing to write."
+        )
     m, t = report["all"]
-    return {"stat_match_rate": f"{_rate(m, t):.4f}", "stat_match_sample": str(t)}
+    return {
+        "stat_match_rate": f"{_rate(m, t):.4f}",
+        "stat_match_sample": str(t),
+        "armor_match_rate": f"{_rate(armor_m, armor_t):.4f}",
+        "armor_match_sample": str(armor_t),
+    }

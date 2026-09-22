@@ -75,12 +75,36 @@ API stats are `{stat_id, name, category, value}`; category is `primary`
 weight is kept in the DB as `weight_bp` and returned by
 `/api/item/<id>?debug=1`.
 
+### Base armor (computed, cross-checked the same way)
+
+Armor isn't in the stat array. Forever computes it from four DB2s pulled
+with the Forever build (`common/armor.py`):
+
+```
+armor  = round(ItemArmorTotal[ilvl][material] × ArmorLocation[invType][material] × ItemArmorQuality[ilvl][quality])
+shield = ItemArmorShield[ilvl][quality]        (no location factor)
+```
+
+Robes (InventoryType 20) have an all-zero ArmorLocation row and use Chest's.
+Only Cloth/Leather/Mail/Plate/Shield subclasses get armor, and cloaks are
+Cloth subclass. The generic `Modifier` column is deliberately unused, because
+its one checkable case disagreed with Classic. `validate.py` compares every
+shared armor item with Classic Era's stored `Resistances_0`. On 2026-09-22
+**99.25%** of unchanged items matched (1989/2004), vs a 92% floor, and
+93.3% of changed items did. The misses are hand-set armor on rings, necks,
+off-hands and totems, plus deprecated/test items. The anchor is Fiery
+Slippers = 35 armor. Both the rate floor and the anchor fail the ingest.
+The tooltip shows armor first ("35 Armor"), then the stat lines.
+`?debug=1` adds `classic_armor`.
+
 ### Not done yet (follow-ups)
 
-- **Armor totals and weapon damage** aren't in the stat array. They compute
-  from `ItemArmorTotal` / `ItemArmorQuality` / `ArmorLocation` (armor) and
-  the `ItemDamage*` tables × item speed (weapon damage) — same approach,
-  different tables. Currently not shown.
+- **Weapon damage** is the last computed field not shown yet: min/max damage
+  and DPS from the `ItemDamage*` tables × the item's speed (`ItemDelay`). It
+  uses the same self-validation against Classic Era's stored
+  `MinDamage_0`/`MaxDamage_0`.
+- **Hand-set armor on misc items** (e.g. Emerald Circle's 50 armor) isn't
+  computed. Forever may express it as bonus-armor stat 50 instead.
 - **Equip-spell → stat false "changed":** Classic keeps things like spell
   damage/AP/hit as equip spells, Forever as stats, so items like Inferno
   Robe diff as `changed` with an empty Classic side. Folding Classic's

@@ -139,6 +139,7 @@
   .detail-meta { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-dim); margin-bottom: 0.9rem; }
   .stat-list { list-style: none; margin-bottom: 1rem; }
   .stat-list li { font-size: 0.85rem; padding: 0.15rem 0; }
+  .stat-list li.armor { color: var(--ink); }
   .stat-list li.equip { color: var(--ok); }
   .stat-list li.unknown { color: var(--ink-dim); }
   .obtain-box {
@@ -355,8 +356,10 @@ async function showDetail(id) {
   const color = QUALITY_COLORS[item.quality] || '#fff';
   state.picked[state.selectedSlot] = { id: item.id, name: item.name, quality: item.quality };
   renderPaperdoll();
-  const statsHtml = item.stats.length
-    ? `<ul class="stat-list">${statItems(item.stats)}</ul>`
+  // WoW tooltip order: base armor first, then the stat lines.
+  const armorHtml = item.armor ? `<li class="armor">${item.armor} Armor</li>` : '';
+  const statsHtml = item.stats.length || armorHtml
+    ? `<ul class="stat-list">${armorHtml}${statItems(item.stats)}</ul>`
     : '<p class="hint-note" style="padding:0 0 0.8rem;">No stats on this item.</p>';
 
   const obtain = `How to obtain this item is not yet known — item information is most likely datamined.`;

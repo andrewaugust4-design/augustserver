@@ -18,10 +18,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from common import icons
+from common.armor import ARMOR_TABLES
 from common.constants import CLASSIC_ERA_PRODUCT, FOREVER_PRODUCT
 
 from . import wago_client
-from .normalize import diff_items, load_budgets, parse_build, write_db
+from .normalize import diff_items, load_armor_tables, load_budgets, parse_build, write_db
 from .validate import ValidationError, validate
 
 log = logging.getLogger("wow.ingest")
@@ -31,7 +32,7 @@ CACHE_DIR = DATA_DIR / "raw"
 DB_PATH = DATA_DIR / "wow.db"
 
 TABLES = ("Item", "ItemSparse")
-FOREVER_ONLY_TABLES = ("RandPropPoints",)
+FOREVER_ONLY_TABLES = ("RandPropPoints", *ARMOR_TABLES)
 
 
 def main() -> None:
@@ -75,6 +76,7 @@ def main() -> None:
         CACHE_DIR / forever_version / "Item.csv",
         CACHE_DIR / forever_version / "ItemSparse.csv",
         budgets=budgets,
+        armor_tables=load_armor_tables(CACHE_DIR / forever_version),
     )
     era_items = parse_build(
         CACHE_DIR / era_version / "Item.csv",
