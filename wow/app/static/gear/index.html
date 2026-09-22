@@ -124,10 +124,8 @@
   .detail-meta { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-dim); margin-bottom: 0.9rem; }
   .stat-list { list-style: none; margin-bottom: 1rem; }
   .stat-list li { font-size: 0.85rem; padding: 0.15rem 0; }
-  .provisional-tag {
-    font-family: var(--mono); font-size: 0.6rem; color: var(--gold); border: 1px solid var(--gold-dim);
-    border-radius: 4px; padding: 0.05rem 0.3rem; margin-left: 0.4rem; vertical-align: middle;
-  }
+  .stat-list li.equip { color: var(--ok); }
+  .stat-list li.unknown { color: var(--ink-dim); }
   .obtain-box {
     font-size: 0.82rem; color: var(--ink-dim); background: rgba(255,255,255,0.03);
     border: 1px solid var(--panel-edge); border-radius: 8px; padding: 0.7rem 0.9rem; margin-bottom: 0.9rem;
@@ -197,12 +195,22 @@ async function api(path) {
   return res.json();
 }
 
+// Tooltip order: primary attributes, then resistances, then Equip: lines.
+const STAT_CATEGORY_ORDER = { primary: 0, resistance: 1, equip: 2 };
+
 function statLine(s) {
-  if (s.provisional) {
-    return `${s.name}: weight ${(s.weight_bp / 100).toFixed(1)}%<span class="provisional-tag">provisional</span>`;
-  }
-  const sign = s.amount >= 0 ? '+' : '';
-  return `${sign}${s.amount} ${s.name}`;
+  if (s.value === null || s.value === undefined) return `${s.name}: value not yet known`;
+  const text = `${s.value >= 0 ? '+' : ''}${s.value} ${s.name}`;
+  return s.category === 'equip' ? `Equip: ${text}` : text;
+}
+
+function statItems(stats) {
+  return [...stats]
+    .sort((a, b) => (STAT_CATEGORY_ORDER[a.category] ?? 2) - (STAT_CATEGORY_ORDER[b.category] ?? 2))
+    .map(s => {
+      const cls = s.value === null || s.value === undefined ? 'unknown' : (s.category === 'equip' ? 'equip' : '');
+      return `<li class="${cls}">${statLine(s)}</li>`;
+    }).join('');
 }
 
 function renderBanner(meta) {
@@ -210,7 +218,9 @@ function renderBanner(meta) {
   const refreshed = meta.refreshed_at ? new Date(meta.refreshed_at).toUTCString().replace('GMT', 'UTC') : 'unknown';
   el.innerHTML =
     `<strong>Beta data</strong> — datamined from Forever build ${meta.forever_build} vs Classic Era ${meta.classic_era_build}. ` +
-    `Stats and sources are provisional and may change before the Nov 4 launch.` +
+    `Anything here may change before the Nov 4 launch. Stat values are computed from Forever's stat budgets` +
+    (meta.stat_match_rate ? ` (cross-checked: ${(meta.stat_match_rate * 100).toFixed(1)}% of ${meta.stat_match_sample} stats on unchanged items match Classic Era)` : '') +
+    `; how to obtain items isn't datamined.` +
     `<span class="meta-line">${meta.item_count} items · ${meta.new_count} new · ${meta.changed_count} changed · refreshed ${refreshed}</span>`;
 }
 
@@ -309,7 +319,7 @@ async function showDetail(id) {
 
   const color = QUALITY_COLORS[item.quality] || '#fff';
   const statsHtml = item.stats.length
-    ? `<ul class="stat-list">${item.stats.map(s => `<li>${statLine(s)}</li>`).join('')}</ul>`
+    ? `<ul class="stat-list">${statItems(item.stats)}</ul>`
     : '<p class="hint-note" style="padding:0 0 0.8rem;">No stats on this item.</p>';
 
   const obtain = `How to obtain this item is not yet known — item information is most likely datamined.`;
@@ -347,7 +357,7 @@ async function showDiff(id) {
     const val = diffEntry[side];
     if (diffEntry.field === 'stats') {
       if (!val.length) return '<em style="color:var(--ink-dim)">none</em>';
-      return val.map(s => side === 'forever' ? statLine(s) : (s.amount >= 0 ? '+' : '') + s.amount + ' ' + s.name).join('<br>');
+      return val.map(statLine).join('<br>');
     }
     return String(val);
   };

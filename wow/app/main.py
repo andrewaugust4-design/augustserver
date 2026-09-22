@@ -3,8 +3,8 @@
 Runs behind a reverse proxy at /wow (see deploy/ for nginx + systemd). All
 item data comes from a SQLite DB built by `python -m ingest.run`, which
 diffs the Forever beta against Classic Era via the wago.tools DB2 export —
-see ingest/normalize.py and common/ for how "provisional" and "changed" are
-derived. This app never talks to wago.tools itself; it only reads the DB.
+see common/stats.py for how Forever stat values are computed and
+ingest/normalize.py for how "changed" is derived. This app never talks to wago.tools itself; it only reads the DB.
 """
 
 import json
@@ -22,6 +22,13 @@ from . import db
 app = FastAPI(title="WoW: Forever", docs_url=None, redoc_url=None)
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+
+def _public_stats(stats: list[dict], debug: bool) -> list[dict]:
+    """Drop the raw StatPercentEditor weight unless ?debug=1."""
+    if debug:
+        return stats
+    return [{k: v for k, v in s.items() if k != "weight_bp"} for s in stats]
 
 
 def _row_to_summary(row: sqlite3.Row) -> dict:
@@ -73,6 +80,8 @@ async def meta() -> dict:
         "new_count": int(m.get("new_count", 0)),
         "changed_count": int(m.get("changed_count", 0)),
         "unchanged_count": int(m.get("unchanged_count", 0)),
+        "stat_match_rate": float(m["stat_match_rate"]) if m.get("stat_match_rate") else None,
+        "stat_match_sample": int(m.get("stat_match_sample", 0)),
     }
 
 
@@ -110,7 +119,7 @@ async def items(class_: str = Query(..., alias="class"), slot: str = Query(...))
 
 
 @app.get("/api/item/{item_id}")
-async def item_detail(item_id: int) -> dict:
+async def item_detail(item_id: int, debug: bool = False) -> dict:
     try:
         with db.get_conn() as conn:
             row = conn.execute("SELECT * FROM items WHERE id = ?", (item_id,)).fetchone()
@@ -130,10 +139,12 @@ async def item_detail(item_id: int) -> dict:
         "allowable_class_mask": row["allowable_class_mask"],
         "item_level": row["item_level"],
         "change_status": row["change_status"],
-        "provisional": bool(row["provisional"]),
-        "stats": json.loads(row["stats_json"]),
+        "stats": _public_stats(json.loads(row["stats_json"]), debug),
         "classic_stats": json.loads(row["classic_stats_json"]) if row["classic_stats_json"] else None,
         "classic_item_level": row["classic_item_level"],
-        "diff": json.loads(row["diff_json"]) if row["diff_json"] else None,
+        "diff": [
+            {**d, "forever": _public_stats(d["forever"], debug)} if d["field"] == "stats" else d
+            for d in json.loads(row["diff_json"])
+        ] if row["diff_json"] else None,
         "wowhead_url": f"https://www.wowhead.com/forever/item={row['id']}",
     }

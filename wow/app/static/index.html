@@ -174,11 +174,11 @@
     const refreshed = m.refreshed_at ? new Date(m.refreshed_at).toUTCString().replace('GMT', 'UTC') : 'unknown';
     el.innerHTML =
       `<strong>Beta data</strong> — datamined from Forever build ${m.forever_build} vs Classic Era ${m.classic_era_build}. ` +
-      `Stats and sources are provisional and may change before the Nov 4 launch.` +
+      `Beta item data may change before the Nov 4 launch.` +
       `<span class="meta-line">${m.item_count} items tracked · ${m.new_count} new · ${m.changed_count} changed vs Classic Era · last refreshed ${refreshed}</span>`;
   } catch (e) {
     el.innerHTML = `<strong>Beta data</strong> — build info unavailable right now (has the ingest run yet?). ` +
-      `Stats and sources are provisional and may change before the Nov 4 launch.`;
+      `Beta item data may change before the Nov 4 launch.`;
   }
 })();
 </script>

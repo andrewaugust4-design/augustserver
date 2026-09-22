@@ -24,32 +24,68 @@ There's no HTML scraping of item data. Everything comes from
   build no longer mentions "Forever" — Blizzard/wago.tools could always
   repoint that product slug at something else later.
 - Classic Era baseline is product **`wow_classic_era`**.
-- Item data comes from the `Item` and `ItemSparse` DB2 tables via
+- Item data comes from the `Item` and `ItemSparse` DB2 tables, plus
+  `RandPropPoints` (Forever build only) for stat budgets, via
   `https://wago.tools/db2/<Table>/csv?build=<version>` (note: the query
   param is `build`, not `version`). CSVs are cached under `data/raw/<build>/`
   so re-runs on an unchanged build don't re-download.
 
-### The provisional-stats caveat (this is the important part)
-
-Verified directly against both builds' `ItemSparse.csv` headers:
+### Stat values (computed, then cross-checked every ingest)
 
 - **Classic Era** stores stats as absolute numbers: `StatModifier_bonusStat_N`
-  (a stat type id) paired with `StatModifier_bonusAmount_N` (the real value).
-- **The Forever beta build has no `StatModifier_bonusAmount_*` columns at
-  all.** It only has `StatModifier_bonusStat_N` (same stat type id) paired
-  with `StatPercentEditor_N` — a per-stat weight in basis points against some
-  item-level budget curve we don't have. There's no way to turn that into a
-  real number without either the actual budget formula or in-game
-  confirmation.
+  (a stat type id) paired with `StatModifier_bonusAmount_N`, plus
+  resistances in `Resistances_N` (mapped onto the same stat ids Forever uses).
+- **Forever** has no `bonusAmount` columns. Each stat is
+  `StatModifier_bonusStat_N` + `StatPercentEditor_N`, a weight in basis
+  points. The real value is the standard retail itemization formula:
 
-So: Classic Era stats are stored and displayed as real numbers. Forever stats
-are stored as `{stat_id, weight_bp}` and every consumer (API response,
-ingest diff, frontend) marks them `provisional: true` and renders them as a
-weight percentage, never as a tooltip-style final number. The Gear Browser's
-beta banner repeats this caveat on every page. Don't "fix" this by inventing
-a budget curve — if Blizzard/the datamine community publishes one before
-launch, implement it for real and drop the provisional flag for computed
-values (leave it on for anything still guessed).
+  ```
+  value = round(StatPercentEditor / 10000 × RandPropPoints[itemLevel][<Quality>_<slotIndex>])
+  ```
+
+  Quality picks the Good/Superior/Epic column family and InventoryType picks
+  the column index 0–4 — see `common/stats.py` for both maps. Those maps were
+  fitted per InventoryType × quality against Classic Era's stored values,
+  not assumed.
+
+**The safety net:** `ingest/validate.py` recomputes every `unchanged` item
+(same stat ids/level/quality/slot in both builds) and compares against
+Classic Era's real numbers. On 2026-09-22: 99.84% of primary stats
+(2536/2540), 100% of resistances (118/118), 99.85% overall; 97.96% even on
+`changed` items. It also asserts the Fiery Slippers anchor (+7 Int, +6 Stam,
++4 Spi, +13 fire spell damage). If the primary-stat match rate drops below
+95% or the anchor is off, the ingest **exits non-zero and keeps the previous
+DB** rather than publishing bad numbers — if that fires after a Blizzard
+patch, the budget table or slot/quality mapping changed; re-fit it.
+The match rate is stored in `meta` and shown in the Gear Browser banner.
+
+**Stat ids** follow retail's `ItemModType` enum. Every non-primary id was
+identified against Classic Era's equip spell for the same item
+(`ItemEffect` → `SpellEffect` aura type / school mask; note Classic stores
+`EffectBasePoints` as value − 1) or its `Resistances_N`: 51 Fire, 52 Frost,
+53 Holy, 54 Shadow, 55 Nature, 56 Arcane resistance (Thunderfury: 51 = +8,
+55 = +9); 83–89 are spell damage in school-mask order (85–89 confirmed, 84
+holy inferred from the order). Hit/crit/dodge/parry/block come out as
+**ratings** (Classic's +1% hit ≈ 10) — we label them as ratings and don't
+convert to %. Unknown ids render as "Stat N" and every ingest logs them
+(currently 83, 92, 98, 114, 115, 132, 135 — seven items total).
+
+API stats are `{stat_id, name, category, value}`; category is `primary`
+(inline "+N Stat"), `resistance`, or `equip` (an "Equip:" line). The raw
+weight is kept in the DB as `weight_bp` and returned by
+`/api/item/<id>?debug=1`.
+
+### Not done yet (follow-ups)
+
+- **Armor totals and weapon damage** aren't in the stat array. They compute
+  from `ItemArmorTotal` / `ItemArmorQuality` / `ArmorLocation` (armor) and
+  the `ItemDamage*` tables × item speed (weapon damage) — same approach,
+  different tables. Currently not shown.
+- **Equip-spell → stat false "changed":** Classic keeps things like spell
+  damage/AP/hit as equip spells, Forever as stats, so items like Inferno
+  Robe diff as `changed` with an empty Classic side. Folding Classic's
+  equip spells into its stat list (the mapping above) would fix that.
+- Name the remaining unmapped stat ids as the datamine community does.
 
 ### Change detection (new / changed / unchanged)
 
@@ -82,7 +118,8 @@ python -m ingest.run --force    # re-download even if cached
 ```
 
 Run once by hand after first deploy (before starting `wow.service`) to
-populate `data/wow.db`. In production, `wow-refresh.timer` runs this daily.
+populate `data/wow.db`, and again after any deploy that changes the DB
+schema (the app reads whatever the last ingest wrote). In production, `wow-refresh.timer` runs this daily.
 
 ## Local dev
 

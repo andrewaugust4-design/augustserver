@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sys
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,7 +20,8 @@ from pathlib import Path
 from common.constants import CLASSIC_ERA_PRODUCT, FOREVER_PRODUCT
 
 from . import wago_client
-from .normalize import diff_items, parse_build, write_db
+from .normalize import diff_items, load_budgets, parse_build, write_db
+from .validate import ValidationError, validate
 
 log = logging.getLogger("wow.ingest")
 
@@ -28,6 +30,7 @@ CACHE_DIR = DATA_DIR / "raw"
 DB_PATH = DATA_DIR / "wow.db"
 
 TABLES = ("Item", "ItemSparse")
+FOREVER_ONLY_TABLES = ("RandPropPoints",)
 
 
 def main() -> None:
@@ -61,19 +64,27 @@ def main() -> None:
     for version in (forever_version, era_version):
         for table in TABLES:
             wago_client.download_csv(table, version, CACHE_DIR, force=args.force)
+    for table in FOREVER_ONLY_TABLES:
+        wago_client.download_csv(table, forever_version, CACHE_DIR, force=args.force)
 
+    budgets = load_budgets(CACHE_DIR / forever_version / "RandPropPoints.csv")
     forever_items = parse_build(
         CACHE_DIR / forever_version / "Item.csv",
         CACHE_DIR / forever_version / "ItemSparse.csv",
-        stats_absolute=False,
+        budgets=budgets,
     )
     era_items = parse_build(
         CACHE_DIR / era_version / "Item.csv",
         CACHE_DIR / era_version / "ItemSparse.csv",
-        stats_absolute=True,
     )
     merged = diff_items(forever_items, era_items)
     counts = Counter(item["change_status"] for item in merged.values())
+
+    try:
+        validation_meta = validate(merged)
+    except ValidationError as exc:
+        log.error("Stat validation failed, keeping the previous DB: %s", exc)
+        sys.exit(1)
 
     meta = {
         "forever_product": FOREVER_PRODUCT,
@@ -86,8 +97,9 @@ def main() -> None:
         "new_count": str(counts.get("new", 0)),
         "changed_count": str(counts.get("changed", 0)),
         "unchanged_count": str(counts.get("unchanged", 0)),
+        **validation_meta,
     }
-    write_db(DB_PATH, meta, merged)
+    write_db(DB_PATH, meta, merged, budgets)
     log.info("Ingest complete: %s", meta)
 
 

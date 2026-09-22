@@ -1,6 +1,6 @@
 """Item.csv + ItemSparse.csv -> normalized item records, Forever-vs-Classic-Era
-diff, and the SQLite write. See common/constants.py and common/proficiency.py
-for the verified enum values this relies on.
+diff, and the SQLite write. See common/constants.py, common/proficiency.py
+and common/stats.py for the verified enum values and stat formula this relies on.
 """
 
 from __future__ import annotations
@@ -16,40 +16,32 @@ from common.constants import (
     ITEM_CLASS_WEAPON,
     WEAPON_SUBCLASS_NAMES,
 )
+from common.stats import CLASSIC_RESISTANCE_COLUMN_TO_STAT, stat_budget, stat_info, stat_value
 from .wago_client import read_csv
 
-# Standard ItemModType ids that actually show up on Classic-era gear. Anything
-# not listed here just renders as "Stat <id>" rather than blocking ingest.
-STAT_NAMES = {
-    0: "Mana", 1: "Health", 3: "Agility", 4: "Strength", 5: "Intellect",
-    6: "Spirit", 7: "Stamina", 12: "Defense Rating", 13: "Dodge Rating",
-    14: "Parry Rating", 15: "Block Rating", 16: "Melee Hit Rating",
-    17: "Ranged Hit Rating", 18: "Spell Hit Rating", 19: "Melee Crit Rating",
-    20: "Ranged Crit Rating", 21: "Spell Crit Rating", 31: "Melee Haste Rating",
-    32: "Ranged Haste Rating", 33: "Spell Haste Rating", 35: "Hit Rating",
-    36: "Critical Strike Rating", 37: "Resilience Rating", 38: "Haste Rating",
-    39: "Expertise Rating", 40: "Attack Power", 41: "Ranged Attack Power",
-    42: "Feral Attack Power", 43: "Spell Healing Done", 44: "Spell Damage Done",
-    45: "Mana Regeneration", 46: "Armor Penetration Rating", 47: "Spell Power",
-    48: "Health Regen", 49: "Spell Penetration", 50: "Block Value",
-}
+
+def load_budgets(randproppoints_csv: Path) -> dict[int, dict]:
+    """RandPropPoints rows keyed by item level (the table's ID)."""
+    return {int(row["ID"]): row for row in read_csv(randproppoints_csv)}
 
 
-def stat_name(stat_id: int) -> str:
-    return STAT_NAMES.get(stat_id, f"Stat {stat_id}")
-
+def _stat(stat_id: int, value: int | None, **extra) -> dict:
+    name, category = stat_info(stat_id)
+    return {"stat_id": stat_id, "name": name, "category": category, "value": value, **extra}
 
 DIFF_FIELDS = ("name", "quality", "slot", "material", "required_level", "item_level")
 
 
-def parse_build(item_csv: Path, itemsparse_csv: Path, *, stats_absolute: bool) -> dict[int, dict]:
+def parse_build(item_csv: Path, itemsparse_csv: Path, *, budgets: dict[int, dict] | None = None) -> dict[int, dict]:
     """Parse one build's Item + ItemSparse CSVs into {item_id: record}.
 
-    `stats_absolute` selects which ItemSparse fields carry the stat values:
-    True (Classic Era) reads StatModifier_bonusAmount_N (real numbers);
-    False (Forever) reads StatPercentEditor_N, a datamined per-stat weight
-    in basis points against an item-level budget we don't have — so those
-    values are marked provisional rather than treated as final numbers.
+    Classic Era (`budgets` is None) stores real stat numbers in
+    StatModifier_bonusAmount_N, plus resistances in Resistances_N. Forever
+    (`budgets` = load_budgets(...)) has no bonusAmount columns — only
+    StatPercentEditor_N, a weight in basis points that's multiplied by the
+    item's RandPropPoints budget (see common/stats.py). Forever stats keep
+    the raw weight as `weight_bp` for debugging; value is None when the
+    item has no budget (unknown slot/quality/level).
     """
     items_by_id = {row["ID"]: row for row in read_csv(item_csv)}
     out: dict[int, dict] = {}
@@ -79,6 +71,10 @@ def parse_build(item_csv: Path, itemsparse_csv: Path, *, stats_absolute: bool) -
         except ValueError:
             allowable_class_mask = -1
 
+        item_level = int(row.get("ItemLevel") or 0)
+        quality = int(row.get("OverallQualityID") or 0)
+        budget = stat_budget(budgets, item_level, quality, inventory_type) if budgets is not None else None
+
         stats = []
         for i in range(10):
             stat_raw = row.get(f"StatModifier_bonusStat_{i}")
@@ -90,16 +86,20 @@ def parse_build(item_csv: Path, itemsparse_csv: Path, *, stats_absolute: bool) -
                 continue
             if stat_id < 0:
                 continue
-            if stats_absolute:
+            if budgets is None:
                 amount = int(row.get(f"StatModifier_bonusAmount_{i}") or 0)
-                if amount == 0:
-                    continue
-                stats.append({"stat_id": stat_id, "name": stat_name(stat_id), "amount": amount, "provisional": False})
+                if amount:
+                    stats.append(_stat(stat_id, amount))
             else:
-                weight = int(row.get(f"StatPercentEditor_{i}") or row.get(f"StatPercentageOfSocket_{i}") or 0)
-                if weight == 0:
-                    continue
-                stats.append({"stat_id": stat_id, "name": stat_name(stat_id), "weight_bp": weight, "provisional": True})
+                weight = int(row.get(f"StatPercentEditor_{i}") or 0)
+                if weight:
+                    value = stat_value(weight, budget) if budget is not None else None
+                    stats.append(_stat(stat_id, value, weight_bp=weight))
+        if budgets is None:
+            for col, stat_id in CLASSIC_RESISTANCE_COLUMN_TO_STAT.items():
+                amount = int(row.get(f"Resistances_{col}") or 0)
+                if amount:
+                    stats.append(_stat(stat_id, amount))
 
         if item_class == ITEM_CLASS_WEAPON:
             material = WEAPON_SUBCLASS_NAMES.get(item_subclass)
@@ -110,7 +110,7 @@ def parse_build(item_csv: Path, itemsparse_csv: Path, *, stats_absolute: bool) -
         out[item_id] = {
             "id": item_id,
             "name": name,
-            "quality": int(row.get("OverallQualityID") or 0),
+            "quality": quality,
             "item_class": item_class,
             "item_subclass": item_subclass,
             "inventory_type": inventory_type,
@@ -118,9 +118,8 @@ def parse_build(item_csv: Path, itemsparse_csv: Path, *, stats_absolute: bool) -
             "material": material,
             "required_level": int(row.get("RequiredLevel") or 0),
             "allowable_class_mask": allowable_class_mask,
-            "item_level": int(row.get("ItemLevel") or 0),
+            "item_level": item_level,
             "stats": stats,
-            "provisional": not stats_absolute,
         }
 
     return out
@@ -160,7 +159,8 @@ CREATE TABLE IF NOT EXISTS meta (
     value TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS items (
+DROP TABLE IF EXISTS items;
+CREATE TABLE items (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
     quality INTEGER NOT NULL,
@@ -173,39 +173,52 @@ CREATE TABLE IF NOT EXISTS items (
     allowable_class_mask INTEGER NOT NULL,
     item_level INTEGER NOT NULL,
     change_status TEXT NOT NULL,
-    provisional INTEGER NOT NULL,
     stats_json TEXT NOT NULL,
     classic_stats_json TEXT,
     classic_item_level INTEGER,
     diff_json TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_items_slot ON items(slot);
-CREATE INDEX IF NOT EXISTS idx_items_change_status ON items(change_status);
+CREATE INDEX idx_items_slot ON items(slot);
+CREATE INDEX idx_items_change_status ON items(change_status);
+
+-- Forever build's RandPropPoints (stat budget per item level), kept for
+-- reference/debugging (item stat values are already computed at ingest).
+DROP TABLE IF EXISTS rand_prop_points;
+CREATE TABLE rand_prop_points (
+    item_level INTEGER PRIMARY KEY,
+    budgets_json TEXT NOT NULL
+);
 """
 
+BUDGET_COLUMNS = [f"{family}_{i}" for family in ("Epic", "Superior", "Good") for i in range(5)]
 
-def write_db(db_path: Path, meta: dict[str, str], items: dict[int, dict]) -> None:
+
+def write_db(db_path: Path, meta: dict[str, str], items: dict[int, dict], budgets: dict[int, dict]) -> None:
+    """Rebuild the DB contents in a single transaction, so the running app
+    never sees a half-written items table."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, isolation_level=None)
     try:
-        conn.executescript(SCHEMA)
-        conn.execute("DELETE FROM items")
+        conn.execute("BEGIN")
+        for statement in SCHEMA.split(";"):
+            if statement.strip():
+                conn.execute(statement)
         conn.executemany(
             """
             INSERT INTO items (
                 id, name, quality, item_class, item_subclass, inventory_type,
                 slot, material, required_level, allowable_class_mask,
-                item_level, change_status, provisional, stats_json,
+                item_level, change_status, stats_json,
                 classic_stats_json, classic_item_level, diff_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
                     it["id"], it["name"], it["quality"], it["item_class"], it["item_subclass"],
                     it["inventory_type"], it["slot"], it["material"], it["required_level"],
                     it["allowable_class_mask"], it["item_level"], it["change_status"],
-                    int(it["provisional"]), json.dumps(it["stats"]),
+                    json.dumps(it["stats"]),
                     json.dumps(it["classic_stats"]) if "classic_stats" in it else None,
                     it.get("classic_item_level"),
                     json.dumps(it["diff"]) if it.get("diff") else None,
@@ -214,10 +227,20 @@ def write_db(db_path: Path, meta: dict[str, str], items: dict[int, dict]) -> Non
             ],
         )
         conn.executemany(
+            "INSERT INTO rand_prop_points (item_level, budgets_json) VALUES (?, ?)",
+            [
+                (ilvl, json.dumps({col: int(row[col]) for col in BUDGET_COLUMNS}))
+                for ilvl, row in sorted(budgets.items())
+            ],
+        )
+        conn.executemany(
             "INSERT INTO meta (key, value) VALUES (?, ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             list(meta.items()),
         )
-        conn.commit()
+        conn.execute("COMMIT")
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
     finally:
         conn.close()
