@@ -64,6 +64,11 @@ CLASS_ARMOR_MAX = {
 
 SHIELD_CLASSES = {"warrior", "paladin", "shaman"}
 
+# Classes that can wield a one-hander in the off hand (vanilla: Warrior and
+# Hunter via the Dual Wield skill, Rogue baseline). Shamans only got dual
+# wield in TBC. Used by the set builder to allow One-Hand items in off hand.
+DUAL_WIELD_CLASSES = {"warrior", "rogue", "hunter"}
+
 # Full weapon-type matrix, verified per class (see module docstring).
 CLASS_WEAPONS = {
     "warrior": {
