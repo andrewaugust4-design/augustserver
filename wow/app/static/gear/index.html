@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script>document.write('<base href="' + location.pathname.replace(/gear\/.*$/, '') + 'gear/">');</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gear Browser — WoW: Forever</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -168,6 +169,56 @@
   .diff-col-head { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); padding-bottom: 0.4rem; border-bottom: 1px solid var(--panel-edge); margin-bottom: 0.5rem; }
   .diff-field { padding: 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
   .diff-field-name { font-family: var(--mono); font-size: 0.65rem; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+
+  /* ── set builder ── */
+  .char-row { display: flex; flex-wrap: wrap; gap: 0.6rem 1rem; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 0.3rem; }
+  .field label { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); }
+  select, input[type=number] {
+    font-family: var(--sans); font-size: 0.85rem; color: var(--ink); background: var(--panel);
+    border: 1px solid var(--panel-edge); border-radius: 8px; padding: 0.45rem 0.6rem;
+  }
+  input[type=number] { width: 5rem; }
+  .btn {
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 0.55rem 0.9rem; border-radius: 8px; cursor: pointer;
+    background: rgba(224,168,46,0.12); border: 1px solid var(--gold-dim); color: var(--gold);
+  }
+  .btn:hover { border-color: var(--gold); }
+  .btn.ghost { background: none; color: var(--ink-dim); border-color: var(--panel-edge); }
+  .share-box { display: none; margin-top: 0.7rem; font-family: var(--mono); font-size: 0.75rem; }
+  .share-box.show { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+  .share-box input { flex: 1; min-width: 14rem; font-family: var(--mono); font-size: 0.75rem; color: var(--ink);
+    background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 6px; padding: 0.4rem 0.5rem; }
+  .toast { font-size: 0.8rem; color: var(--alert); min-height: 1.1rem; margin-top: 0.5rem; }
+
+  .builder { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 1.2rem; align-items: start; }
+  @media (max-width: 760px) { .builder { grid-template-columns: 1fr; } }
+  .slot-btn { position: relative; width: 100%; }
+  .slot-btn .slot-label { font-size: 0.64rem; letter-spacing: 0.06em; text-transform: uppercase; }
+  .slot-btn .slot-empty { font-family: var(--sans); font-size: 0.74rem; color: var(--ink-dim); opacity: 0.6; }
+  .slot-btn.warn { border-color: rgba(226,96,76,0.7); }
+  .slot-btn .warn-mark { color: var(--alert); margin-left: auto; font-size: 0.8rem; }
+  .slot-btn .unequip { margin-left: auto; color: var(--ink-dim); padding: 0 0.2rem; font-size: 0.85rem; }
+  .slot-btn .unequip:hover { color: var(--alert); }
+  .slot-btn .warn-mark + .unequip { margin-left: 0.3rem; }
+  .unavailable-icon { opacity: 0.35; filter: grayscale(1); }
+
+  .sheet { background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 12px; padding: 1rem 1.1rem; font-size: 0.82rem; }
+  .sheet h3 { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); margin: 0.9rem 0 0.4rem; font-weight: 500; }
+  .sheet h3:first-child { margin-top: 0; }
+  .sheet .row { display: flex; justify-content: space-between; padding: 0.12rem 0; }
+  .sheet .row .v { font-family: var(--mono); }
+  .sheet .row .v.gear { color: var(--ok); }
+  .sheet .note { font-size: 0.72rem; color: var(--ink-dim); line-height: 1.45; margin-top: 0.35rem; }
+  .sheet .prov { font-size: 0.74rem; color: var(--gold); background: rgba(224,168,46,0.08); border: 1px solid rgba(224,168,46,0.3); border-radius: 6px; padding: 0.4rem 0.55rem; margin-bottom: 0.6rem; }
+  .sheet .estimated { color: var(--gold); text-transform: none; letter-spacing: 0; font-family: var(--sans); font-size: 0.72rem; }
+  .flag { font-family: var(--mono); font-size: 0.62rem; padding: 0.1rem 0.4rem; border-radius: 999px; border: 1px solid var(--alert); color: var(--alert); }
+  .flag.dim { border-color: var(--panel-edge); color: var(--ink-dim); }
+  .item-row.equipped { border-color: var(--gold); }
+  .item-row .info-btn { margin-left: auto; background: none; border: 1px solid var(--panel-edge); color: var(--ink-dim); border-radius: 6px; cursor: pointer; font-family: var(--mono); font-size: 0.66rem; padding: 0.15rem 0.45rem; }
+  .item-row .info-btn:hover { color: var(--gold); border-color: var(--gold); }
+  .slot-issues { font-size: 0.78rem; color: var(--alert); margin-bottom: 0.6rem; }
 </style>
 </head>
 <body>
@@ -181,9 +232,30 @@
     <div class="class-row" id="classRow"></div>
   </section>
 
-  <section id="paperdollSection" style="display:none;">
-    <div class="section-label">Slot</div>
-    <div class="paperdoll" id="paperdoll"></div>
+  <section id="charSection" style="display:none;">
+    <div class="char-row">
+      <div class="field"><label for="raceSelect">Race</label><select id="raceSelect"></select></div>
+      <div class="field"><label for="levelInput">Level</label><input id="levelInput" type="number" min="1" max="60" value="60"></div>
+      <button class="btn" id="saveBtn">Save &amp; share</button>
+      <button class="btn ghost" id="clearBtn">Clear gear</button>
+    </div>
+    <div class="share-box" id="shareBox">
+      <input id="shareUrl" readonly aria-label="Share link"><button class="btn ghost" id="copyBtn">Copy</button>
+    </div>
+    <div class="toast" id="toast"></div>
+  </section>
+
+  <section id="builderSection" style="display:none;">
+    <div class="builder">
+      <div>
+        <div class="section-label">Equipped — click a slot to browse</div>
+        <div class="paperdoll" id="paperdoll"></div>
+      </div>
+      <div>
+        <div class="section-label">Character</div>
+        <div class="sheet" id="sheet">—</div>
+      </div>
+    </div>
   </section>
 
   <section id="resultsSection" style="display:none;">
@@ -202,28 +274,49 @@
 
 <script>
 const QUALITY_COLORS = {0:'#9d9d9d',1:'#ffffff',2:'#1eff00',3:'#0070dd',4:'#a335ee',5:'#ff8000',6:'#e6cc80',7:'#00ccff'};
-
 const PLACEHOLDER_ICON = '../icon-placeholder.svg';
+const INVTYPE_ONE_HAND = 13;
 
-// Last item opened per paperdoll slot (reset on class change).
-const state = { classes: [], slots: [], selectedClass: null, selectedSlot: null, picked: {} };
+// The loadout is the single source of truth: { class, race, level, slots: {slot: itemId} }.
+// `equipped` caches item summaries by slot for rendering; the sheet endpoint
+// recomputes stats and per-slot issues from ids after every change.
+const state = {
+  classes: [], chars: null, slotDefs: [],
+  loadout: { class: null, race: null, level: 60, slots: {} },
+  equipped: {}, issues: {},
+  selectedSlot: null, listItems: [],
+  savedId: null, dirty: false,
+};
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 
 // Self-hosted icon (see /api/icon) with a quality-colored frame. Lazy so a
 // long slot list doesn't fire hundreds of requests at once.
-function iconImg(id, quality, size = '') {
+function iconImg(id, quality, size = '', extraClass = '') {
   const q = QUALITY_COLORS[quality];
   const src = id ? `../api/icon/${id}.jpg` : PLACEHOLDER_ICON;
-  return `<img class="icon ${size}" src="${src}" alt="" loading="lazy" style="${q ? '--q:' + q : ''}" ` +
+  return `<img class="icon ${size} ${extraClass}" src="${src}" alt="" loading="lazy" style="${q ? '--q:' + q : ''}" ` +
          `onerror="this.onerror=null;this.src='${PLACEHOLDER_ICON}'">`;
 }
 
-async function api(path) {
-  const res = await fetch('../api/' + path);
-  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+async function api(path, body) {
+  const opts = body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+  const res = await fetch('../api/' + path, opts);
+  if (!res.ok) {
+    const detail = (await res.json().catch(() => ({}))).detail;
+    throw new Error(typeof detail === 'string' ? detail : res.statusText);
+  }
   return res.json();
 }
 
-// Tooltip order: primary attributes, then resistances, then Equip: lines.
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg || '';
+}
+
+// ── tooltip helpers (unchanged from the browser) ────────────────────────────
 const STAT_CATEGORY_ORDER = { primary: 0, resistance: 1, equip: 2 };
 
 function statLine(s) {
@@ -252,6 +345,7 @@ function renderBanner(meta) {
     `<span class="meta-line">${meta.item_count} items · ${meta.new_count} new · ${meta.changed_count} changed · refreshed ${refreshed}</span>`;
 }
 
+// ── class / race / level ────────────────────────────────────────────────────
 function renderClasses() {
   const row = document.getElementById('classRow');
   row.innerHTML = state.classes.map(c => `
@@ -264,67 +358,160 @@ function renderClasses() {
   });
 }
 
-function renderPaperdoll() {
-  const bySlug = Object.fromEntries(state.slots.map(s => [s.slug, s]));
-  const leftCol = ['head', 'neck', 'shoulder', 'back', 'chest', 'wrist'];
-  const rightCol = ['hands', 'waist', 'legs', 'feet', 'finger', 'trinket'];
-  const weaponRow = ['relic', 'mainhand', 'offhand', 'ranged'];
+function racesFor(classSlug) {
+  const allowed = state.chars.combos[classSlug] || [];
+  return state.chars.races
+    .map(r => ({ ...r, combo: allowed.find(c => c.race === r.id) }))
+    .filter(r => r.combo);
+}
 
-  const slotBtn = slug => {
-    const it = state.picked[slug];
-    return `<button class="slot-btn${slug === state.selectedSlot ? ' active' : ''}" data-slug="${slug}">
-      ${it ? iconImg(it.id, it.quality) : iconImg(null)}
-      <span class="slot-text">${bySlug[slug].label}${it ? `<span class="slot-item" style="color:${QUALITY_COLORS[it.quality] || '#fff'}">${it.name}</span>` : ''}</span>
-    </button>`;
+function renderRaceSelect() {
+  const sel = document.getElementById('raceSelect');
+  const races = racesFor(state.loadout.class);
+  sel.innerHTML = ['Alliance', 'Horde'].map(f => {
+    const opts = races.filter(r => r.faction === f).map(r =>
+      `<option value="${r.id}">${esc(r.name)}${r.combo.new ? ' (new)' : ''}</option>`).join('');
+    return opts ? `<optgroup label="${f}">${opts}</optgroup>` : '';
+  }).join('');
+  if (!races.some(r => r.id === state.loadout.race)) state.loadout.race = races[0]?.id ?? null;
+  sel.value = state.loadout.race;
+}
+
+function syncCharControls() {
+  document.querySelectorAll('.class-btn').forEach(b => b.classList.toggle('active', b.dataset.slug === state.loadout.class));
+  renderRaceSelect();
+  document.getElementById('levelInput').value = state.loadout.level;
+  document.getElementById('charSection').style.display = 'block';
+  document.getElementById('builderSection').style.display = 'block';
+}
+
+function selectClass(slug) {
+  if (slug === state.loadout.class) return;
+  state.loadout.class = slug;
+  // Gear stays equipped across class changes; the sheet flags what the new class can't use.
+  syncCharControls();
+  closeList();
+  changed();
+}
+
+// ── equipping ──────────────────────────────────────────────────────────────
+function slotDef(slot) { return state.slotDefs.find(s => s.slot === slot); }
+
+function equip(slot, item) {
+  const L = state.loadout.slots;
+  if (L[slot] === item.id) { unequip(slot); return; }       // clicking the equipped item again takes it off
+  if (item.unique) {
+    const other = Object.keys(L).find(s => s !== slot && L[s] === item.id);
+    if (other) { toast(`${item.name} is unique — it's already equipped in ${slotDef(other).label}.`); return; }
+  }
+  let note = '';
+  const main = state.equipped.mainhand;
+  if (slot === 'mainhand' && item.two_hand && L.offhand) {
+    note = 'Off hand cleared — two-handers use both hands.';
+    delete L.offhand; delete state.equipped.offhand;
+  }
+  if (slot === 'offhand' && main && main.two_hand) {
+    note = 'Two-hander removed to make room for the off hand.';
+    delete L.mainhand; delete state.equipped.mainhand;
+  }
+  L[slot] = item.id;
+  state.equipped[slot] = item;
+  toast(note);
+  changed();
+}
+
+function unequip(slot) {
+  delete state.loadout.slots[slot];
+  delete state.equipped[slot];
+  toast('');
+  changed();
+}
+
+function renderPaperdoll() {
+  const leftCol = ['head', 'neck', 'shoulder', 'back', 'chest', 'wrist', 'finger1', 'trinket1'];
+  const rightCol = ['hands', 'waist', 'legs', 'feet', 'finger2', 'trinket2'];
+  const weaponRow = ['mainhand', 'offhand', 'ranged'];
+
+  const slotBtn = slot => {
+    const def = slotDef(slot);
+    const id = state.loadout.slots[slot];
+    const it = state.equipped[slot];
+    const issues = state.issues[slot] || [];
+    const unavailable = id && !it;
+    let inner;
+    if (!id) {
+      inner = `${iconImg(null)}<span class="slot-text"><span class="slot-label">${def.label}</span><span class="slot-empty">empty</span></span>`;
+    } else if (unavailable) {
+      inner = `${iconImg(null, undefined, '', 'unavailable-icon')}<span class="slot-text"><span class="slot-label">${def.label}</span><span class="slot-item" style="color:var(--alert)">Item unavailable (#${id})</span></span>`;
+    } else {
+      inner = `${iconImg(it.id, it.quality)}<span class="slot-text"><span class="slot-label">${def.label}</span><span class="slot-item" style="color:${QUALITY_COLORS[it.quality] || '#fff'}">${esc(it.name)}</span></span>`;
+    }
+    const warn = issues.length ? `<span class="warn-mark" title="${esc(issues.map(i => i.msg).join(' '))}">⚠</span>` : '';
+    const off = id ? `<span class="unequip" data-unequip="${slot}" title="Unequip" role="button" aria-label="Unequip ${def.label}">✕</span>` : '';
+    return `<button class="slot-btn${slot === state.selectedSlot ? ' active' : ''}${issues.length ? ' warn' : ''}" data-slot="${slot}">${inner}${warn}${off}</button>`;
   };
 
-  document.getElementById('paperdoll').innerHTML = `
+  const el = document.getElementById('paperdoll');
+  el.innerHTML = `
     <div class="paperdoll-col">${leftCol.map(slotBtn).join('')}</div>
     <div class="paperdoll-col">${rightCol.map(slotBtn).join('')}</div>
     <div class="weapon-row">${weaponRow.map(slotBtn).join('')}</div>
   `;
-  document.querySelectorAll('.slot-btn').forEach(btn => {
-    btn.addEventListener('click', () => selectSlot(btn.dataset.slug));
-  });
+  el.querySelectorAll('.slot-btn').forEach(btn => btn.addEventListener('click', e => {
+    const off = e.target.closest('[data-unequip]');
+    if (off) { e.stopPropagation(); unequip(off.dataset.unequip); return; }
+    openList(btn.dataset.slot);
+  }));
 }
 
-function selectClass(slug) {
-  state.selectedClass = slug;
+// ── slot item list ─────────────────────────────────────────────────────────
+function closeList() {
   state.selectedSlot = null;
-  state.picked = {};
-  document.querySelectorAll('.class-btn').forEach(b => b.classList.toggle('active', b.dataset.slug === slug));
-  document.getElementById('paperdollSection').style.display = 'block';
   document.getElementById('resultsSection').style.display = 'none';
-  renderPaperdoll();
 }
 
-async function selectSlot(slug) {
-  state.selectedSlot = slug;
-  document.querySelectorAll('.slot-btn').forEach(b => b.classList.toggle('active', b.dataset.slug === slug));
-  const slotLabel = state.slots.find(s => s.slug === slug).label;
-  const className = state.classes.find(c => c.slug === state.selectedClass).name;
-  document.getElementById('resultsLabel').textContent = `${className} — ${slotLabel}`;
-  const resultsSection = document.getElementById('resultsSection');
+async function openList(slot) {
+  state.selectedSlot = slot;
+  renderPaperdoll();
+  const def = slotDef(slot);
+  const className = state.classes.find(c => c.slug === state.loadout.class).name;
+  document.getElementById('resultsLabel').textContent = `${className} — ${def.label}`;
+  const section = document.getElementById('resultsSection');
   const results = document.getElementById('results');
-  resultsSection.style.display = 'block';
+  section.style.display = 'block';
   results.innerHTML = '<div class="hint-note">Loading…</div>';
-
+  const L = state.loadout;
   try {
-    const items = await api(`items?class=${encodeURIComponent(state.selectedClass)}&slot=${encodeURIComponent(slug)}`);
-    if (items.length === 0) {
-      results.innerHTML = `<div class="empty-note">No ${className} items known for this slot yet.</div>`;
-      return;
-    }
-    results.innerHTML = `<div class="item-list">${items.map(itemRow).join('')}</div>`;
-    results.querySelectorAll('.item-name').forEach(btn => {
-      btn.addEventListener('click', () => showDetail(btn.dataset.id));
-    });
-    results.querySelectorAll('.badge.changed').forEach(badge => {
-      badge.addEventListener('click', e => { e.stopPropagation(); showDiff(badge.dataset.id); });
-    });
+    state.listItems = await api(`items?class=${encodeURIComponent(L.class)}&slot=${encodeURIComponent(def.browse)}&race=${L.race}&level=${L.level}`);
   } catch (e) {
-    results.innerHTML = `<div class="empty-note">Couldn't load items: ${e.message}</div>`;
+    results.innerHTML = `<div class="empty-note">Couldn't load items: ${esc(e.message)}</div>`;
+    return;
   }
+  renderList();
+}
+
+function renderList() {
+  const results = document.getElementById('results');
+  const slot = state.selectedSlot;
+  const issues = state.issues[slot] || [];
+  if (!state.listItems.length) {
+    results.innerHTML = `<div class="empty-note">No items known for this slot yet.</div>`;
+    return;
+  }
+  results.innerHTML =
+    (issues.length ? `<div class="slot-issues">⚠ ${issues.map(i => esc(i.msg)).join(' ')}</div>` : '') +
+    `<div class="hint-note" style="padding-top:0">Click an item to equip it (click again to take it off).</div>` +
+    `<div class="item-list">${state.listItems.map(itemRow).join('')}</div>`;
+  results.querySelectorAll('.item-name').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = state.listItems.find(i => i.id === Number(btn.dataset.id));
+      equip(slot, item);
+    });
+  });
+  results.querySelectorAll('.info-btn').forEach(btn => btn.addEventListener('click', () => showDetail(btn.dataset.id)));
+  results.querySelectorAll('.badge.changed').forEach(badge => {
+    badge.addEventListener('click', e => { e.stopPropagation(); showDiff(badge.dataset.id); });
+  });
 }
 
 function itemRow(item) {
@@ -332,12 +519,20 @@ function itemRow(item) {
   let badge = '';
   if (item.change_status === 'new') badge = '<span class="badge new">New</span>';
   if (item.change_status === 'changed') badge = `<span class="badge changed" data-id="${item.id}">Changed</span>`;
+  const flags = [];
+  if (item.level_ok === false) flags.push(`<span class="flag">req ${item.required_level}</span>`);
+  if (item.race_ok === false) flags.push(`<span class="flag">race</span>`);
+  if (item.unique) flags.push(`<span class="flag dim">unique</span>`);
+  if (item.two_hand) flags.push(`<span class="flag dim">2H</span>`);
+  if (state.selectedSlot === 'offhand' && item.inventory_type === INVTYPE_ONE_HAND) flags.push(`<span class="flag dim">1H</span>`);
+  const equipped = state.loadout.slots[state.selectedSlot] === item.id;
   return `
-    <div class="item-row">
+    <div class="item-row${equipped ? ' equipped' : ''}">
       ${iconImg(item.id, item.quality)}
-      <button class="item-name" style="color:${color}" data-id="${item.id}">${item.name}</button>
+      <button class="item-name" style="color:${color}" data-id="${item.id}">${esc(item.name)}</button>
       <span class="item-ilvl">ilvl ${item.item_level}${item.required_level ? ' · req ' + item.required_level : ''}</span>
-      ${badge}
+      ${badge}${flags.join('')}
+      <button class="info-btn" data-id="${item.id}" title="Tooltip">info</button>
     </div>
   `;
 }
@@ -349,13 +544,11 @@ async function showDetail(id) {
   try {
     item = await api(`item/${id}`);
   } catch (e) {
-    results.innerHTML = `<div class="empty-note">Couldn't load item: ${e.message}</div>`;
+    results.innerHTML = `<div class="empty-note">Couldn't load item: ${esc(e.message)}</div>`;
     return;
   }
 
   const color = QUALITY_COLORS[item.quality] || '#fff';
-  state.picked[state.selectedSlot] = { id: item.id, name: item.name, quality: item.quality };
-  renderPaperdoll();
   // WoW tooltip order: base armor first, then the stat lines.
   const armorHtml = item.armor ? `<li class="armor">${item.armor} Armor</li>` : '';
   const statsHtml = item.stats.length || armorHtml
@@ -370,7 +563,7 @@ async function showDetail(id) {
       <div class="detail-head">
         ${iconImg(item.id, item.quality, 'lg')}
         <div>
-          <div class="detail-name" style="color:${color}">${item.name}</div>
+          <div class="detail-name" style="color:${color}">${esc(item.name)}</div>
           <div class="detail-meta">
             ilvl ${item.item_level}${item.required_level ? ' · requires level ' + item.required_level : ''}
             ${item.material ? ' · ' + item.material : ''}
@@ -383,7 +576,7 @@ async function showDetail(id) {
       <a class="wowhead-link" href="${item.wowhead_url}" target="_blank" rel="noopener">View on Wowhead →</a>
     </div>
   `;
-  document.getElementById('detailBack').addEventListener('click', () => selectSlot(state.selectedSlot));
+  document.getElementById('detailBack').addEventListener('click', renderList);
 }
 
 async function showDiff(id) {
@@ -419,6 +612,145 @@ async function showDiff(id) {
   overlay.classList.remove('hidden');
 }
 
+// ── character sheet ────────────────────────────────────────────────────────
+let sheetSeq = 0;
+
+function changed() {
+  state.dirty = true;
+  if (state.savedId) document.getElementById('shareBox').classList.remove('show');
+  renderPaperdoll();
+  if (state.selectedSlot) renderList();
+  refreshSheet();
+}
+
+async function refreshSheet() {
+  const seq = ++sheetSeq;
+  let data;
+  try {
+    data = await api('sheet', state.loadout);
+  } catch (e) {
+    document.getElementById('sheet').innerHTML = `<div class="empty-note">Couldn't compute the sheet: ${esc(e.message)}</div>`;
+    return;
+  }
+  if (seq !== sheetSeq) return;  // a newer change is already in flight
+  state.issues = {};
+  for (const [slot, info] of Object.entries(data.slots)) {
+    if (info.item) state.equipped[slot] = info.item; else delete state.equipped[slot];
+    if (info.issues.length) state.issues[slot] = info.issues;
+  }
+  renderPaperdoll();
+  if (state.selectedSlot && document.querySelector('.item-list')) renderList();
+  renderSheet(data.sheet);
+}
+
+const ATTR_LABELS = { strength: 'Strength', agility: 'Agility', stamina: 'Stamina', intellect: 'Intellect', spirit: 'Spirit' };
+const pct = v => v === null || v === undefined ? null : `${v.toFixed(2)}%`;
+
+function row(label, value, title = '', gear = false) {
+  if (value === null || value === undefined) return '';
+  return `<div class="row"${title ? ` title="${esc(title)}"` : ''}><span>${label}</span><span class="v${gear ? ' gear' : ''}">${value}</span></div>`;
+}
+
+function renderSheet(s) {
+  const c = s.combat;
+  const attrs = Object.entries(s.attributes).map(([k, v]) =>
+    row(ATTR_LABELS[k], v.total, `base ${v.base} + gear ${v.gear}`, v.gear > 0)).join('');
+  const resists = Object.entries(s.resistances).map(([k, v]) => row(k[0].toUpperCase() + k.slice(1), v)).join('');
+  const ratings = Object.entries(s.gear_ratings).map(([k, v]) => row(`+${esc(k)}`, v)).join('');
+  const other = Object.entries(s.gear_other).map(([k, v]) => row(`+${esc(k)}`, v)).join('');
+  document.getElementById('sheet').innerHTML = `
+    ${s.provisional.map(p => `<div class="prov">Provisional: ${esc(p)}</div>`).join('')}
+    <h3>Attributes <span class="estimated" style="color:var(--ink-dim)">(hover for base + gear)</span></h3>
+    ${attrs}
+    <h3>Vitals</h3>
+    ${row('Health', s.health)}
+    ${s.mana !== null ? row('Mana', s.mana) : row('Resource', s.resource)}
+    ${row('Armor', s.armor.total, `items ${s.armor.items} + agility ${s.armor.agility}`)}
+    <h3>Resistances</h3>
+    ${resists}
+    ${s.racials ? `<div class="note">Racial: ${esc(s.racials)}</div>` : ''}
+    <h3>Combat <span class="estimated">— Estimated · unbuffed, no talents</span></h3>
+    ${row('Attack power', c.melee_ap)}
+    ${row('Ranged attack power', c.ranged_ap)}
+    ${row('Melee crit', pct(c.melee_crit))}
+    ${row('Ranged crit', pct(c.ranged_crit))}
+    ${row('Spell crit', pct(c.spell_crit))}
+    ${row('Dodge', pct(c.dodge))}
+    ${row('Parry', pct(c.parry))}
+    ${row('Block', pct(c.block))}
+    ${row('Block value', c.block_value)}
+    ${row('Defense', c.defense)}
+    ${ratings || other ? `<h3>Other gear bonuses</h3>${ratings}${other}` : ''}
+    <div class="note">
+      Gear ratings (hit/crit/dodge…) aren't converted to % — Forever's rating table isn't known yet.
+      Set bonuses not yet included. Weapon damage / DPS pending.
+    </div>
+  `;
+}
+
+// ── save / load ────────────────────────────────────────────────────────────
+async function saveSet() {
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true;
+  try {
+    const res = await api('set', state.loadout);
+    state.savedId = res.id;
+    state.dirty = false;
+    const url = new URL(res.path, document.baseURI.replace(/gear\/$/, '')).href;
+    history.replaceState(null, '', url);
+    document.getElementById('shareUrl').value = url;
+    document.getElementById('shareBox').classList.add('show');
+    toast('');
+  } catch (e) {
+    toast(`Couldn't save: ${e.message}`);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function loadFromUrl() {
+  const m = location.pathname.match(/\/gear\/set\/([A-Za-z0-9]+)\/?$/);
+  if (!m) return false;
+  try {
+    const loadout = await api(`set/${m[1]}`);
+    state.loadout = { class: loadout.class, race: loadout.race, level: loadout.level, slots: loadout.slots || {} };
+    state.savedId = m[1];
+    syncCharControls();
+    // Loaded as-is (race is kept even if the class no longer offers it — the sheet says so).
+    renderPaperdoll();
+    await refreshSheet();
+    state.dirty = false;
+    document.getElementById('shareUrl').value = location.href;
+    document.getElementById('shareBox').classList.add('show');
+    return true;
+  } catch (e) {
+    toast(`Couldn't load that set: ${e.message}`);
+    return false;
+  }
+}
+
+// ── wiring ─────────────────────────────────────────────────────────────────
+document.getElementById('raceSelect').addEventListener('change', e => {
+  state.loadout.race = Number(e.target.value);
+  if (state.selectedSlot) openList(state.selectedSlot);
+  changed();
+});
+document.getElementById('levelInput').addEventListener('change', e => {
+  const lvl = Math.max(1, Math.min(state.chars.max_level, Math.round(Number(e.target.value)) || 60));
+  e.target.value = lvl;
+  state.loadout.level = lvl;
+  if (state.selectedSlot) openList(state.selectedSlot);
+  changed();
+});
+document.getElementById('saveBtn').addEventListener('click', saveSet);
+document.getElementById('clearBtn').addEventListener('click', () => {
+  state.loadout.slots = {}; state.equipped = {}; toast(''); changed();
+});
+document.getElementById('copyBtn').addEventListener('click', () => {
+  const input = document.getElementById('shareUrl');
+  input.select();
+  navigator.clipboard?.writeText(input.value).then(() => toast('Link copied.'), () => {});
+});
 document.getElementById('modalClose').addEventListener('click', () => document.getElementById('modalOverlay').classList.add('hidden'));
 document.getElementById('modalOverlay').addEventListener('click', e => {
   if (e.target.id === 'modalOverlay') e.currentTarget.classList.add('hidden');
@@ -426,15 +758,18 @@ document.getElementById('modalOverlay').addEventListener('click', e => {
 
 (async function init() {
   try {
-    const [meta, classes, slots] = await Promise.all([api('meta'), api('classes'), api('slots')]);
+    const [meta, classes, chars] = await Promise.all([api('meta'), api('classes'), api('characters')]);
     renderBanner(meta);
     state.classes = classes;
-    state.slots = slots;
+    state.chars = chars;
+    state.slotDefs = chars.slots;
     renderClasses();
   } catch (e) {
     document.getElementById('banner').innerHTML =
-      `<strong>Couldn't load build info</strong> — ${e.message}. Has the ingest run yet? (<code>python -m ingest.run</code>)`;
+      `<strong>Couldn't load build info</strong> — ${esc(e.message)}. Has the ingest run yet? (<code>python -m ingest.run</code>)`;
+    return;
   }
+  await loadFromUrl();
 })();
 </script>
 </body>
