@@ -1,0 +1,28 @@
+# Install: sudo cp deploy/musicreview.service /etc/systemd/system/
+# Then:    sudo systemctl daemon-reload && sudo systemctl enable --now musicreview
+#
+# Assumes the project lives at /opt/musicreview with a venv at
+# /opt/musicreview/venv — adjust paths and User to match your server.
+
+[Unit]
+Description=Music Review audio analysis app (augustserver.com/musicreview)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/musicreview
+EnvironmentFile=/opt/musicreview/.env
+ExecStart=/opt/musicreview/venv/bin/uvicorn app.main:app \
+    --host 127.0.0.1 --port 8060 --root-path /musicreview
+Restart=on-failure
+RestartSec=5
+
+# Hardening (optional but cheap)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

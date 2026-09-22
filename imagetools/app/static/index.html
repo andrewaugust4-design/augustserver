@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Image Tools — augustserver.com</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #171c28;
+    --panel: #202636;
+    --edge: #2e3650;
+    --ink: #e8ecf6;
+    --dim: #8b93ad;
+    --rose: #f0709d;
+    --rose-soft: rgba(240, 112, 157, 0.14);
+    --ok: #7dd6a8;
+    --alert: #f2836b;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+    --sans: "Outfit", system-ui, sans-serif;
+    --check-a: #262d40;
+    --check-b: #1d2333;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 2.5rem 1.25rem 4rem;
+  }
+  .wrap { max-width: 820px; margin: 0 auto; }
+
+  .back-link {
+    display: inline-flex; align-items: center; gap: 0.45rem;
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--dim); text-decoration: none;
+    border: 1px solid var(--edge); border-radius: 6px;
+    padding: 0.45rem 0.85rem; margin-bottom: 1.5rem;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .back-link:hover { color: var(--rose); border-color: var(--rose); }
+  .back-link:focus-visible { outline: 2px solid var(--rose); outline-offset: 2px; }
+
+  header { margin-bottom: 2.25rem; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.18em;
+    color: var(--dim); text-transform: uppercase;
+  }
+  h1 {
+    font-size: clamp(2rem, 6vw, 2.8rem); font-weight: 700;
+    letter-spacing: -0.02em; margin-top: 0.35rem;
+  }
+  h1 .accent { color: var(--rose); }
+  .sub { color: var(--dim); margin-top: 0.5rem; max-width: 54ch; line-height: 1.5; }
+
+  .tool-label {
+    display: inline-block; font-family: var(--mono); font-size: 0.68rem;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--rose);
+    background: var(--rose-soft); border: 1px solid rgba(240,112,157,0.35);
+    border-radius: 999px; padding: 0.3rem 0.8rem; margin-bottom: 1rem;
+  }
+
+  /* ---- drop zone ---- */
+  #dropzone {
+    border: 1px dashed var(--edge); border-radius: 10px;
+    background: var(--panel); padding: 3rem 1.5rem; text-align: center;
+    cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  }
+  #dropzone:hover, #dropzone.dragover { border-color: var(--rose); background: #242b3e; }
+  #dropzone:focus-visible { outline: 2px solid var(--rose); outline-offset: 3px; }
+  #dropzone .big { font-size: 1.1rem; font-weight: 500; }
+  #dropzone .hint {
+    font-family: var(--mono); font-size: 0.72rem; color: var(--dim);
+    margin-top: 0.6rem; letter-spacing: 0.05em;
+  }
+  #fileinput { display: none; }
+
+  /* ---- processing state: scan frame ---- */
+  #processing { display: none; margin-top: 1.5rem; }
+  .scan-frame {
+    position: relative; border: 1px solid var(--edge); border-radius: 10px;
+    background: var(--panel); overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 260px; padding: 1rem;
+  }
+  .scan-frame img { max-width: 100%; max-height: 340px; border-radius: 6px; opacity: 0.55; }
+  .scan-bar {
+    position: absolute; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, transparent, var(--rose), transparent);
+    box-shadow: 0 0 14px var(--rose);
+    animation: scan 1.6s ease-in-out infinite alternate;
+  }
+  @keyframes scan { from { top: 6%; } to { top: 92%; } }
+  @media (prefers-reduced-motion: reduce) {
+    .scan-bar { animation: none; top: 50%; }
+  }
+  #processing .status {
+    font-family: var(--mono); font-size: 0.75rem; color: var(--dim);
+    margin-top: 0.8rem; letter-spacing: 0.05em;
+  }
+
+  /* ---- results ---- */
+  #result { display: none; margin-top: 2rem; }
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  .pane {
+    background: var(--panel); border: 1px solid var(--edge);
+    border-radius: 10px; padding: 0.9rem; min-width: 0;
+  }
+  .pane h3 {
+    font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--dim); margin-bottom: 0.6rem;
+  }
+  .pane .img-holder {
+    border-radius: 6px; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 180px;
+  }
+  .pane .img-holder img { max-width: 100%; max-height: 380px; display: block; }
+  /* The signature: classic transparency checkerboard under the cutout */
+  .checker {
+    background-image:
+      repeating-conic-gradient(var(--check-a) 0% 25%, var(--check-b) 0% 50%);
+    background-size: 22px 22px;
+  }
+  .btn-row { display: flex; gap: 0.6rem; margin-top: 1.25rem; flex-wrap: wrap; }
+  .action-btn {
+    background: none; border: 1px solid var(--edge); color: var(--ink);
+    font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.1em;
+    text-transform: uppercase; padding: 0.6rem 1.2rem; border-radius: 6px;
+    cursor: pointer; text-decoration: none; display: inline-block;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .action-btn:hover { border-color: var(--rose); color: var(--rose); }
+  .action-btn.primary {
+    border-color: rgba(240,112,157,0.55); color: var(--rose);
+    background: var(--rose-soft);
+  }
+  .action-btn.primary:hover { border-color: var(--rose); }
+
+  #error-box {
+    display: none; margin-top: 1.5rem; border: 1px solid var(--alert);
+    border-radius: 8px; padding: 1rem 1.1rem; color: var(--alert);
+    font-family: var(--mono); font-size: 0.8rem; line-height: 1.5;
+  }
+  @media (max-width: 600px) {
+    .compare { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back-link" href="/">‹ Back to August.</a>
+
+  <header>
+    <div class="eyebrow">augustserver.com / imagetools</div>
+    <h1>Image <span class="accent">Tools</span></h1>
+    <p class="sub">Upload an image and get a clean cutout with the background removed —
+    processed locally on this server, exported as a transparent PNG.</p>
+  </header>
+
+  <span class="tool-label">Background remover</span>
+
+  <div id="dropzone" tabindex="0" role="button" aria-label="Upload an image">
+    <div class="big">Drop an image here, or click to browse</div>
+    <div class="hint">PNG · JPG · WEBP · BMP · TIFF — up to 25 MB</div>
+    <input type="file" id="fileinput" accept=".png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,image/*">
+  </div>
+
+  <div id="processing" aria-live="polite">
+    <div class="scan-frame">
+      <img id="scan-preview" alt="Processing preview">
+      <div class="scan-bar"></div>
+    </div>
+    <div class="status">removing background — first run downloads the model, so it can take a minute…</div>
+  </div>
+
+  <div id="error-box"></div>
+
+  <div id="result">
+    <div class="compare">
+      <div class="pane">
+        <h3>Original</h3>
+        <div class="img-holder"><img id="img-before" alt="Original image"></div>
+      </div>
+      <div class="pane">
+        <h3>Cutout</h3>
+        <div class="img-holder checker"><img id="img-after" alt="Image with background removed"></div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <a class="action-btn primary" id="download-btn" download>Download PNG</a>
+      <button class="action-btn" id="reset-btn">Process another image</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const API_REMOVE = "api/remove";
+
+  const dropzone = document.getElementById("dropzone");
+  const fileinput = document.getElementById("fileinput");
+  const processing = document.getElementById("processing");
+  const scanPreview = document.getElementById("scan-preview");
+  const errorBox = document.getElementById("error-box");
+  const result = document.getElementById("result");
+  const imgBefore = document.getElementById("img-before");
+  const imgAfter = document.getElementById("img-after");
+  const downloadBtn = document.getElementById("download-btn");
+
+  let originalURL = null;
+  let cutoutURL = null;
+
+  function revokeURLs() {
+    if (originalURL) { URL.revokeObjectURL(originalURL); originalURL = null; }
+    if (cutoutURL) { URL.revokeObjectURL(cutoutURL); cutoutURL = null; }
+  }
+
+  function resetUI() {
+    revokeURLs();
+    processing.style.display = "none";
+    result.style.display = "none";
+    errorBox.style.display = "none";
+    dropzone.style.display = "block";
+    fileinput.value = "";
+  }
+
+  function showError(msg) {
+    processing.style.display = "none";
+    errorBox.textContent = "ERROR — " + msg;
+    errorBox.style.display = "block";
+    dropzone.style.display = "block";
+  }
+
+  async function upload(file) {
+    resetUI();
+    dropzone.style.display = "none";
+    errorBox.style.display = "none";
+
+    originalURL = URL.createObjectURL(file);
+    scanPreview.src = originalURL;
+    processing.style.display = "block";
+
+    const form = new FormData();
+    form.append("file", file);
+
+    let res;
+    try {
+      res = await fetch(API_REMOVE, { method: "POST", body: form });
+    } catch (e) {
+      return showError("Could not reach the server. " + e.message);
+    }
+    if (!res.ok) {
+      let detail = res.statusText;
+      try { detail = (await res.json()).detail || detail; } catch (_) {}
+      return showError(detail);
+    }
+
+    const blob = await res.blob();
+    cutoutURL = URL.createObjectURL(blob);
+
+    imgBefore.src = originalURL;
+    imgAfter.src = cutoutURL;
+    downloadBtn.href = cutoutURL;
+    downloadBtn.download = (file.name || "image").replace(/\.[^.]+$/, "") + "_nobg.png";
+
+    processing.style.display = "none";
+    result.style.display = "block";
+  }
+
+  // Wiring
+  dropzone.addEventListener("click", () => fileinput.click());
+  dropzone.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileinput.click(); }
+  });
+  fileinput.addEventListener("change", () => {
+    if (fileinput.files.length) upload(fileinput.files[0]);
+  });
+  ["dragover", "dragenter"].forEach((ev) =>
+    dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add("dragover"); })
+  );
+  ["dragleave", "drop"].forEach((ev) =>
+    dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.remove("dragover"); })
+  );
+  dropzone.addEventListener("drop", (e) => {
+    if (e.dataTransfer.files.length) upload(e.dataTransfer.files[0]);
+  });
+  document.getElementById("reset-btn").addEventListener("click", resetUI);
+})();
+</script>
+</body>
+</html>

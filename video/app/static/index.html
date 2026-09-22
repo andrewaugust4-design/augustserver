@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video — augustserver.com</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #221718;
+    --panel: #2d1f20;
+    --edge: #453032;
+    --ink: #f3e9e8;
+    --dim: #a98f90;
+    --red: #f26d6d;
+    --red-soft: rgba(242, 109, 109, 0.12);
+    --ok: #8fd6a0;
+    --alert: #f0a05a;
+    --mono: "DM Mono", ui-monospace, monospace;
+    --sans: "Inter Tight", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink); font-family: var(--sans);
+    min-height: 100vh; padding: 2.5rem 1.25rem 4rem;
+  }
+  .wrap { max-width: 680px; margin: 0 auto; }
+
+  .back-link {
+    display: inline-flex; align-items: center; gap: 0.45rem;
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--dim); text-decoration: none;
+    border: 1px solid var(--edge); border-radius: 6px;
+    padding: 0.45rem 0.85rem; margin-bottom: 1.5rem;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .back-link:hover { color: var(--red); border-color: var(--red); }
+  .back-link:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+
+  header { margin-bottom: 2rem; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.16em;
+    color: var(--dim); text-transform: uppercase;
+  }
+  h1 {
+    font-size: clamp(2rem, 6vw, 2.8rem); font-weight: 700;
+    letter-spacing: -0.02em; margin-top: 0.35rem;
+  }
+  h1 .accent { color: var(--red); }
+  .sub { color: var(--dim); margin-top: 0.5rem; max-width: 54ch; line-height: 1.5; }
+
+  .field-label {
+    display: block; font-family: var(--mono); font-size: 0.62rem;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim);
+    margin-bottom: 0.35rem;
+  }
+  input[type="text"], input[type="password"], select {
+    width: 100%; background: var(--panel); color: var(--ink);
+    border: 1px solid var(--edge); border-radius: 6px;
+    font-family: var(--mono); font-size: 0.82rem; padding: 0.65rem 0.7rem;
+  }
+  input:focus, select:focus { outline: 2px solid var(--red); outline-offset: 1px; }
+
+  .form-grid {
+    display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem;
+  }
+  .form-grid .key { flex: 0 1 220px; }
+  .form-grid .qual { flex: 0 1 160px; }
+
+  .url-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .url-row .grow { flex: 1; min-width: 240px; }
+  .go-btn {
+    background: var(--red-soft); border: 1px solid rgba(242,109,109,0.5);
+    color: var(--red); font-family: var(--mono); font-size: 0.75rem;
+    letter-spacing: 0.08em; text-transform: uppercase; padding: 0 1.3rem;
+    border-radius: 6px; cursor: pointer; transition: border-color 0.15s;
+  }
+  .go-btn:hover { border-color: var(--red); }
+  .hint-line {
+    font-family: var(--mono); font-size: 0.68rem; color: var(--dim);
+    margin-top: 0.5rem; letter-spacing: 0.03em;
+  }
+
+  /* ---- progress ---- */
+  #progress { display: none; margin-top: 1.75rem; }
+  .stage-list {
+    background: var(--panel); border: 1px solid var(--edge);
+    border-radius: 10px; padding: 1.1rem 1.2rem;
+    display: flex; flex-direction: column; gap: 0.65rem;
+  }
+  .stage {
+    display: flex; align-items: center; gap: 0.7rem;
+    font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.05em;
+    color: var(--dim);
+  }
+  .stage .led {
+    width: 9px; height: 9px; border-radius: 50%; background: #533a3c; flex-shrink: 0;
+  }
+  .stage.active { color: var(--ink); }
+  .stage.active .led { background: var(--red); box-shadow: 0 0 8px var(--red); animation: pulse 1s ease-in-out infinite alternate; }
+  .stage.done .led { background: var(--ok); }
+  @keyframes pulse { from { opacity: 0.5; } to { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .stage.active .led { animation: none; } }
+  #status-line {
+    font-family: var(--mono); font-size: 0.72rem; color: var(--dim);
+    margin-top: 0.7rem; letter-spacing: 0.04em;
+  }
+
+  /* ---- result ---- */
+  #result { display: none; margin-top: 1.75rem; }
+  .ticket {
+    background: var(--panel); border: 1px solid var(--edge);
+    border-radius: 10px; padding: 1.25rem 1.3rem;
+  }
+  .ticket h3 {
+    font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ok); margin-bottom: 0.6rem;
+    display: flex; align-items: center; gap: 0.45rem;
+  }
+  .ticket h3::before {
+    content: ""; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--ok); box-shadow: 0 0 6px var(--ok);
+  }
+  .ticket .fname { font-weight: 700; word-break: break-all; margin-bottom: 0.3rem; }
+  .ticket .meta { font-family: var(--mono); font-size: 0.72rem; color: var(--dim); line-height: 1.7; }
+  .btn-row { display: flex; gap: 0.6rem; margin-top: 1rem; flex-wrap: wrap; }
+  .action-btn {
+    background: none; border: 1px solid var(--edge); color: var(--ink);
+    font-family: var(--mono); font-size: 0.73rem; letter-spacing: 0.08em;
+    text-transform: uppercase; padding: 0.6rem 1.2rem; border-radius: 6px;
+    cursor: pointer; text-decoration: none; display: inline-block;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .action-btn:hover { border-color: var(--red); color: var(--red); }
+  .action-btn.primary {
+    border-color: rgba(242,109,109,0.55); color: var(--red); background: var(--red-soft);
+  }
+
+  #error-box {
+    display: none; margin-top: 1.5rem; border: 1px solid var(--alert);
+    border-radius: 8px; padding: 1rem 1.1rem; color: var(--alert);
+    font-family: var(--mono); font-size: 0.78rem; line-height: 1.5;
+    word-break: break-word;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back-link" href="/">‹ Back to August.</a>
+
+  <header>
+    <div class="eyebrow">augustserver.com / video</div>
+    <h1>Video<span class="accent">.</span></h1>
+    <p class="sub">Download a YouTube video as an MP4. Pick a quality cap, paste the link,
+    and grab the file. Results are kept for 1 hour, then deleted.</p>
+  </header>
+
+  <div class="form-grid">
+    <div class="key">
+      <label class="field-label" for="upkey">Upload key</label>
+      <input type="password" id="upkey" autocomplete="off">
+    </div>
+    <div class="qual">
+      <label class="field-label" for="quality">Max quality</label>
+      <select id="quality">
+        <option value="1080">1080p</option>
+        <option value="720" selected>720p</option>
+        <option value="480">480p</option>
+      </select>
+    </div>
+  </div>
+
+  <label class="field-label" for="yturl">YouTube link</label>
+  <div class="url-row">
+    <div class="grow"><input type="text" id="yturl" placeholder="https://www.youtube.com/watch?v=…" spellcheck="false"></div>
+    <button class="go-btn" id="go-btn" type="button">Download</button>
+  </div>
+  <div class="hint-line" id="yt-hint">videos up to 60 minutes · MP4 output</div>
+
+  <div id="progress" aria-live="polite">
+    <div class="stage-list">
+      <div class="stage" id="stage-probing"><span class="led"></span>Checking video</div>
+      <div class="stage" id="stage-downloading"><span class="led"></span>Downloading streams</div>
+      <div class="stage" id="stage-finalizing"><span class="led"></span>Merging to MP4</div>
+    </div>
+    <div id="status-line">queued…</div>
+  </div>
+
+  <div id="error-box"></div>
+
+  <div id="result">
+    <div class="ticket">
+      <h3>MP4 ready</h3>
+      <div class="fname" id="result-name"></div>
+      <div class="meta" id="result-meta"></div>
+      <div class="btn-row">
+        <a class="action-btn primary" id="download-btn">Download MP4</a>
+        <button class="action-btn" id="reset-btn" type="button">Grab another</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const POLL_MS = 1500;
+  const upkey = document.getElementById("upkey");
+  const yturl = document.getElementById("yturl");
+  const progress = document.getElementById("progress");
+  const errorBox = document.getElementById("error-box");
+  const result = document.getElementById("result");
+  const statusLine = document.getElementById("status-line");
+
+  const STAGES = ["probing", "downloading", "finalizing"];
+  const STAGE_TEXT = {
+    queued: "queued — waiting for the downloader (one job runs at a time)…",
+    probing: "checking the video's length and title…",
+    downloading: "downloading video + audio streams — big videos take a while…",
+    finalizing: "merging streams into an MP4…",
+  };
+
+  let pollTimer = null;
+
+  fetch("api/config").then(r => r.json()).then(cfg => {
+    if (cfg.max_yt_minutes) document.getElementById("yt-hint").textContent =
+      "videos up to " + cfg.max_yt_minutes + " minutes · MP4 output · " +
+      cfg.max_file_gb + " GB per-file cap";
+  }).catch(() => {});
+
+  function resetUI() {
+    clearTimeout(pollTimer);
+    progress.style.display = "none";
+    result.style.display = "none";
+    errorBox.style.display = "none";
+    STAGES.forEach(s => document.getElementById("stage-" + s).classList.remove("active", "done"));
+  }
+
+  function showError(msg) {
+    clearTimeout(pollTimer);
+    progress.style.display = "none";
+    errorBox.textContent = "ERROR — " + msg;
+    errorBox.style.display = "block";
+  }
+
+  function setStage(stage) {
+    statusLine.textContent = STAGE_TEXT[stage] || stage;
+    const idx = STAGES.indexOf(stage);
+    STAGES.forEach((s, i) => {
+      const el = document.getElementById("stage-" + s);
+      el.classList.toggle("done", idx > i || stage === "done");
+      el.classList.toggle("active", i === idx);
+    });
+  }
+
+  async function submit() {
+    resetUI();
+    const url = yturl.value.trim();
+    if (!upkey.value) return showError("Enter the upload key first.");
+    if (!url) return showError("Paste a YouTube link first.");
+
+    const form = new FormData();
+    form.append("password", upkey.value);
+    form.append("url", url);
+    form.append("quality", document.getElementById("quality").value);
+
+    progress.style.display = "block";
+    setStage("queued");
+
+    let res;
+    try {
+      res = await fetch("api/jobs", { method: "POST", body: form });
+    } catch (e) {
+      return showError("Could not reach the server. " + e.message);
+    }
+    if (!res.ok) {
+      let detail = res.statusText;
+      try { detail = (await res.json()).detail || detail; } catch (_) {}
+      return showError(detail);
+    }
+    const { job_id } = await res.json();
+    poll(job_id);
+  }
+
+  async function poll(jobId) {
+    let res;
+    try {
+      res = await fetch("api/jobs/" + jobId);
+    } catch (e) {
+      return showError("Lost connection while polling. " + e.message);
+    }
+    if (!res.ok) return showError("Job lookup failed (" + res.status + ").");
+    const job = await res.json();
+
+    if (job.status === "error") return showError(job.error || "Download failed.");
+    if (job.status === "done") return render(jobId, job.result);
+
+    setStage(job.stage || "queued");
+    pollTimer = setTimeout(() => poll(jobId), POLL_MS);
+  }
+
+  function humanSize(bytes) {
+    if (bytes >= 1024 * 1024 * 1024) return (bytes / 1073741824).toFixed(2) + " GB";
+    if (bytes >= 1024 * 1024) return (bytes / 1048576).toFixed(1) + " MB";
+    if (bytes >= 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return bytes + " B";
+  }
+
+  function render(jobId, r) {
+    progress.style.display = "none";
+    document.getElementById("result-name").textContent = r.name;
+    document.getElementById("result-meta").textContent =
+      humanSize(r.size) + " · up to " + r.quality + "p · available for " +
+      r.expires_min + " minutes";
+    document.getElementById("download-btn").href = "api/jobs/" + jobId + "/download";
+    result.style.display = "block";
+  }
+
+  document.getElementById("go-btn").addEventListener("click", submit);
+  yturl.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+  document.getElementById("reset-btn").addEventListener("click", resetUI);
+})();
+</script>
+</body>
+</html>

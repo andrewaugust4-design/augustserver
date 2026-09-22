@@ -1,0 +1,25 @@
+# Install: sudo cp deploy/drop.service /etc/systemd/system/
+# Then:    sudo systemctl daemon-reload && sudo systemctl enable --now drop
+
+[Unit]
+Description=Drop temporary file sharing (augustserver.com/drop)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/drop
+EnvironmentFile=/opt/drop/.env
+ExecStart=/opt/drop/venv/bin/uvicorn app.main:app \
+    --host 127.0.0.1 --port 8062 --root-path /drop
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/opt/drop/data
+
+[Install]
+WantedBy=multi-user.target
