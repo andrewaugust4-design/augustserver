@@ -97,6 +97,59 @@ Slippers = 35 armor. Both the rate floor and the anchor fail the ingest.
 The tooltip shows armor first ("35 Armor"), then the stat lines.
 `?debug=1` adds `classic_armor`.
 
+## Set builder (in the Gear Browser)
+
+Click a paperdoll slot to browse it, then click an item to **equip** it (click
+it again to take it off). Pick race and level (1–60) next to the class. The
+**character sheet** updates live, and **Save & share** mints a permalink
+`/wow/gear/set/<id>`.
+
+- **Loadout** = `{class, race, level, slots: {slot: itemId}}`. Slots are
+  `common/loadout.py`'s 17 (two rings, two trinkets, and ranged shared with
+  relics as in vanilla). Rules:
+  - A two-hander clears the off hand, and an off hand clears a two-hander.
+  - A unique item can't sit in two slots.
+  - One-handers can go in the off hand only for dual-wield classes.
+  - Class, race and level problems are *flagged* on the slot, never dropped.
+  - Ids missing from the data show as "Item unavailable".
+  - `POST /api/sheet` recomputes everything from ids. The frontend enforces
+    the same rules at click time.
+- **Race/level pickers:** combos come from the client's `CharBaseInfo`,
+  including the new ones and both Skyborne races (`ingest/character_data.py`).
+  Item lists flag race- and level-restricted items (`race_ok`/`level_ok`).
+- **Sheet** (`common/character.py`):
+  - Attributes are base + gear (hover for the split), plus health, mana or
+    resource, armor and resistances.
+  - A combat panel is labelled **"Estimated — unbuffed, no talents"**.
+  - Base attributes and health come from the vanilla 1.12 reference in
+    `reference/`. Base mana and the crit coefficients come from the client's
+    `PlayerExpectedStat`. The formulas come from vmangos.
+  - Everything is cross-checked by `ingest/validate_character.py` on every
+    ingest (`meta.char_*`). See **`reference/SOURCES.md`** for every source,
+    correction and known disagreement.
+  - New combos are flagged *derived*, and Skyborne *provisional*.
+- **Saved sets** live in **`data/sets.db`** (`WOW_SETS_DB`), separate from
+  `wow.db`, which the ingest rebuilds and which nothing in `ingest/` touches.
+  - Each save mints a new 8-character id. Rows are never updated, and there's
+    no expiry.
+  - Only class/race/level/item ids are stored, so old links pick up data fixes.
+  - Saves are open to anyone, rate-limited to `WOW_SET_SAVES_PER_HOUR`
+    (default 30) per client IP. The IP comes from `CF-Connecting-IP`, since
+    nginx has no real_ip config, and is stored hashed.
+- The page is also served at `gear/set/<id>`. It sets `<base href>` to
+  `…/gear/` so every relative URL keeps working there.
+
+### Still deferred (set builder)
+
+- **Set bonuses** aren't in the totals (needs `ItemSet`/`ItemSetSpell`). The
+  totals are raw item-stat sums, and the sheet says so.
+- **Weapon damage / DPS** on the sheet waits on the weapon-damage follow-up
+  below. AP is attribute-based only until then.
+- **Gear ratings** (hit/crit/dodge/parry/block) aren't converted to %, because
+  Forever's rating table is unknown. They're listed under "Other gear bonuses".
+- **Shield block value** isn't in the Forever item data, so block value is
+  Str-based plus gear "block value" only.
+
 ### Not done yet (follow-ups)
 
 - **Weapon damage** is the last computed field not shown yet: min/max damage
@@ -199,7 +252,9 @@ python -m ingest.run --force    # re-download even if cached
 
 Run once by hand after first deploy (before starting `wow.service`) to
 populate `data/wow.db`, and again after any deploy that changes the DB
-schema (the app reads whatever the last ingest wrote). In production, `wow-refresh.timer` runs this daily.
+schema (the app reads whatever the last ingest wrote). The set-builder
+deploy is one of those: it adds item race/unique columns and the
+race/class/level tables. In production, `wow-refresh.timer` runs this daily.
 
 ## Local dev
 
