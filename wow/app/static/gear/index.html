@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gear Browser — WoW: Forever</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #1b160e;
+    --panel: #251e12;
+    --panel-edge: #3d331d;
+    --ink: #f0e6d2;
+    --ink-dim: #a89878;
+    --gold: #e0a82e;
+    --gold-dim: #8a6b1f;
+    --alert: #e2604c;
+    --ok: #8fc79a;
+    --new: #34d399;
+    --changed: #e0a82e;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+    --sans: "Space Grotesk", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 2rem 1.25rem 4rem;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+
+  .back-link {
+    display: inline-flex; align-items: center; gap: 0.45rem;
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink-dim); text-decoration: none;
+    border: 1px solid var(--panel-edge); border-radius: 6px;
+    padding: 0.45rem 0.85rem; margin-bottom: 1.25rem;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .back-link:hover { color: var(--gold); border-color: var(--gold); }
+
+  h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 700; letter-spacing: -0.01em; margin-bottom: 0.9rem; }
+  h1 .accent { color: var(--gold); }
+
+  .banner {
+    background: rgba(224, 168, 46, 0.08);
+    border: 1px solid rgba(224, 168, 46, 0.35);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.78rem;
+    line-height: 1.55;
+  }
+  .banner strong { color: var(--gold); }
+  .banner .meta-line { display: block; margin-top: 0.3rem; font-family: var(--mono); font-size: 0.68rem; color: var(--ink-dim); }
+
+  section { margin-bottom: 1.5rem; }
+  .section-label {
+    font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink-dim); margin-bottom: 0.6rem;
+  }
+
+  /* class picker */
+  .class-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .class-btn {
+    font-family: var(--sans); font-size: 0.85rem; font-weight: 500;
+    padding: 0.5rem 0.9rem; border-radius: 8px; cursor: pointer;
+    background: var(--panel); border: 1px solid var(--panel-edge); color: var(--ink);
+    transition: border-color 0.15s, transform 0.1s;
+  }
+  .class-btn:hover { transform: translateY(-1px); }
+  .class-btn.active { border-color: var(--class-color, var(--gold)); box-shadow: 0 0 0 1px var(--class-color, var(--gold)) inset; }
+  .class-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 0.45rem; background: var(--class-color); }
+
+  /* paperdoll */
+  .paperdoll { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 1.2rem; }
+  .paperdoll-col { display: flex; flex-direction: column; gap: 0.5rem; }
+  .weapon-row { grid-column: 1 / -1; display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.4rem; padding-top: 0.6rem; border-top: 1px solid var(--panel-edge); }
+  .slot-btn {
+    font-family: var(--mono); font-size: 0.76rem; text-align: left;
+    padding: 0.55rem 0.8rem; border-radius: 8px; cursor: pointer;
+    background: var(--panel); border: 1px solid var(--panel-edge); color: var(--ink-dim);
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .slot-btn:hover { color: var(--ink); border-color: var(--gold-dim); }
+  .slot-btn.active { color: var(--gold); border-color: var(--gold); }
+  .weapon-row .slot-btn { flex: 1; min-width: 120px; text-align: center; }
+
+  /* item list */
+  .item-list { display: flex; flex-direction: column; gap: 0.35rem; }
+  .item-row {
+    display: flex; align-items: center; gap: 0.6rem;
+    padding: 0.5rem 0.7rem; border-radius: 8px;
+    background: var(--panel); border: 1px solid var(--panel-edge);
+  }
+  .item-name { background: none; border: none; padding: 0; cursor: pointer; font-family: var(--sans); font-size: 0.88rem; font-weight: 500; text-align: left; }
+  .item-name:hover { text-decoration: underline; }
+  .item-ilvl { font-family: var(--mono); font-size: 0.7rem; color: var(--ink-dim); }
+  .badge {
+    font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.05em; text-transform: uppercase;
+    padding: 0.15rem 0.45rem; border-radius: 999px; border: 1px solid transparent; cursor: default;
+  }
+  .badge.new { color: var(--new); border-color: var(--new); background: rgba(52,211,153,0.1); }
+  .badge.changed { color: var(--changed); border-color: var(--changed); background: rgba(224,168,46,0.12); cursor: pointer; }
+  .badge.changed:hover { background: rgba(224,168,46,0.22); }
+  .empty-note, .hint-note { font-size: 0.85rem; color: var(--ink-dim); padding: 0.75rem 0; }
+
+  /* detail panel */
+  .detail-panel {
+    background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 12px;
+    padding: 1.1rem 1.3rem;
+  }
+  .detail-back {
+    background: none; border: none; color: var(--ink-dim); font-family: var(--mono);
+    font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
+    padding: 0; margin-bottom: 0.8rem;
+  }
+  .detail-back:hover { color: var(--gold); }
+  .detail-name { font-size: 1.15rem; font-weight: 600; margin-bottom: 0.2rem; }
+  .detail-meta { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-dim); margin-bottom: 0.9rem; }
+  .stat-list { list-style: none; margin-bottom: 1rem; }
+  .stat-list li { font-size: 0.85rem; padding: 0.15rem 0; }
+  .provisional-tag {
+    font-family: var(--mono); font-size: 0.6rem; color: var(--gold); border: 1px solid var(--gold-dim);
+    border-radius: 4px; padding: 0.05rem 0.3rem; margin-left: 0.4rem; vertical-align: middle;
+  }
+  .obtain-box {
+    font-size: 0.82rem; color: var(--ink-dim); background: rgba(255,255,255,0.03);
+    border: 1px solid var(--panel-edge); border-radius: 8px; padding: 0.7rem 0.9rem; margin-bottom: 0.9rem;
+    line-height: 1.5;
+  }
+  .wowhead-link { font-family: var(--mono); font-size: 0.78rem; color: var(--gold); text-decoration: none; }
+  .wowhead-link:hover { text-decoration: underline; }
+
+  /* changed modal */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center; padding: 1.25rem; z-index: 50;
+  }
+  .modal-overlay.hidden { display: none; }
+  .modal-box {
+    background: var(--panel); border: 1px solid var(--gold-dim); border-radius: 12px;
+    padding: 1.3rem 1.5rem; max-width: 560px; width: 100%; max-height: 80vh; overflow-y: auto;
+  }
+  .modal-title { font-size: 1rem; font-weight: 600; margin-bottom: 0.9rem; }
+  .modal-close {
+    float: right; background: none; border: none; color: var(--ink-dim); cursor: pointer; font-size: 1.1rem;
+  }
+  .diff-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1rem; font-size: 0.82rem; }
+  .diff-col-head { font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); padding-bottom: 0.4rem; border-bottom: 1px solid var(--panel-edge); margin-bottom: 0.5rem; }
+  .diff-field { padding: 0.35rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .diff-field-name { font-family: var(--mono); font-size: 0.65rem; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back-link" href="..">‹ WoW: Forever</a>
+  <h1>Gear <span class="accent">Browser</span></h1>
+  <div class="banner" id="banner">Loading build info…</div>
+
+  <section>
+    <div class="section-label">Class</div>
+    <div class="class-row" id="classRow"></div>
+  </section>
+
+  <section id="paperdollSection" style="display:none;">
+    <div class="section-label">Slot</div>
+    <div class="paperdoll" id="paperdoll"></div>
+  </section>
+
+  <section id="resultsSection" style="display:none;">
+    <div class="section-label" id="resultsLabel">Items</div>
+    <div id="results"></div>
+  </section>
+</div>
+
+<div class="modal-overlay hidden" id="modalOverlay">
+  <div class="modal-box">
+    <button class="modal-close" id="modalClose" aria-label="Close">✕</button>
+    <div class="modal-title" id="modalTitle">Changed vs Classic Era</div>
+    <div class="diff-grid" id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+const QUALITY_COLORS = {0:'#9d9d9d',1:'#ffffff',2:'#1eff00',3:'#0070dd',4:'#a335ee',5:'#ff8000',6:'#e6cc80',7:'#00ccff'};
+
+const state = { classes: [], slots: [], selectedClass: null, selectedSlot: null };
+
+async function api(path) {
+  const res = await fetch('../api/' + path);
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+  return res.json();
+}
+
+function statLine(s) {
+  if (s.provisional) {
+    return `${s.name}: weight ${(s.weight_bp / 100).toFixed(1)}%<span class="provisional-tag">provisional</span>`;
+  }
+  const sign = s.amount >= 0 ? '+' : '';
+  return `${sign}${s.amount} ${s.name}`;
+}
+
+function renderBanner(meta) {
+  const el = document.getElementById('banner');
+  const refreshed = meta.refreshed_at ? new Date(meta.refreshed_at).toUTCString().replace('GMT', 'UTC') : 'unknown';
+  el.innerHTML =
+    `<strong>Beta data</strong> — datamined from Forever build ${meta.forever_build} vs Classic Era ${meta.classic_era_build}. ` +
+    `Stats and sources are provisional and may change before the Nov 4 launch.` +
+    `<span class="meta-line">${meta.item_count} items · ${meta.new_count} new · ${meta.changed_count} changed · refreshed ${refreshed}</span>`;
+}
+
+function renderClasses() {
+  const row = document.getElementById('classRow');
+  row.innerHTML = state.classes.map(c => `
+    <button class="class-btn" style="--class-color:${c.color}" data-slug="${c.slug}">
+      <span class="class-swatch"></span>${c.name}
+    </button>
+  `).join('');
+  row.querySelectorAll('.class-btn').forEach(btn => {
+    btn.addEventListener('click', () => selectClass(btn.dataset.slug));
+  });
+}
+
+function renderPaperdoll() {
+  const bySlug = Object.fromEntries(state.slots.map(s => [s.slug, s]));
+  const leftCol = ['head', 'neck', 'shoulder', 'back', 'chest', 'wrist'];
+  const rightCol = ['hands', 'waist', 'legs', 'feet', 'finger', 'trinket'];
+  const weaponRow = ['relic', 'mainhand', 'offhand', 'ranged'];
+
+  const slotBtn = slug => `<button class="slot-btn" data-slug="${slug}">${bySlug[slug].label}</button>`;
+
+  document.getElementById('paperdoll').innerHTML = `
+    <div class="paperdoll-col">${leftCol.map(slotBtn).join('')}</div>
+    <div class="paperdoll-col">${rightCol.map(slotBtn).join('')}</div>
+    <div class="weapon-row">${weaponRow.map(slotBtn).join('')}</div>
+  `;
+  document.querySelectorAll('.slot-btn').forEach(btn => {
+    btn.addEventListener('click', () => selectSlot(btn.dataset.slug));
+  });
+}
+
+function selectClass(slug) {
+  state.selectedClass = slug;
+  state.selectedSlot = null;
+  document.querySelectorAll('.class-btn').forEach(b => b.classList.toggle('active', b.dataset.slug === slug));
+  document.getElementById('paperdollSection').style.display = 'block';
+  document.getElementById('resultsSection').style.display = 'none';
+  renderPaperdoll();
+}
+
+async function selectSlot(slug) {
+  state.selectedSlot = slug;
+  document.querySelectorAll('.slot-btn').forEach(b => b.classList.toggle('active', b.dataset.slug === slug));
+  const slotLabel = state.slots.find(s => s.slug === slug).label;
+  const className = state.classes.find(c => c.slug === state.selectedClass).name;
+  document.getElementById('resultsLabel').textContent = `${className} — ${slotLabel}`;
+  const resultsSection = document.getElementById('resultsSection');
+  const results = document.getElementById('results');
+  resultsSection.style.display = 'block';
+  results.innerHTML = '<div class="hint-note">Loading…</div>';
+
+  try {
+    const items = await api(`items?class=${encodeURIComponent(state.selectedClass)}&slot=${encodeURIComponent(slug)}`);
+    if (items.length === 0) {
+      results.innerHTML = `<div class="empty-note">No ${className} items known for this slot yet.</div>`;
+      return;
+    }
+    results.innerHTML = `<div class="item-list">${items.map(itemRow).join('')}</div>`;
+    results.querySelectorAll('.item-name').forEach(btn => {
+      btn.addEventListener('click', () => showDetail(btn.dataset.id));
+    });
+    results.querySelectorAll('.badge.changed').forEach(badge => {
+      badge.addEventListener('click', e => { e.stopPropagation(); showDiff(badge.dataset.id); });
+    });
+  } catch (e) {
+    results.innerHTML = `<div class="empty-note">Couldn't load items: ${e.message}</div>`;
+  }
+}
+
+function itemRow(item) {
+  const color = QUALITY_COLORS[item.quality] || '#fff';
+  let badge = '';
+  if (item.change_status === 'new') badge = '<span class="badge new">New</span>';
+  if (item.change_status === 'changed') badge = `<span class="badge changed" data-id="${item.id}">Changed</span>`;
+  return `
+    <div class="item-row">
+      <button class="item-name" style="color:${color}" data-id="${item.id}">${item.name}</button>
+      <span class="item-ilvl">ilvl ${item.item_level}${item.required_level ? ' · req ' + item.required_level : ''}</span>
+      ${badge}
+    </div>
+  `;
+}
+
+async function showDetail(id) {
+  const results = document.getElementById('results');
+  results.innerHTML = '<div class="hint-note">Loading…</div>';
+  let item;
+  try {
+    item = await api(`item/${id}`);
+  } catch (e) {
+    results.innerHTML = `<div class="empty-note">Couldn't load item: ${e.message}</div>`;
+    return;
+  }
+
+  const color = QUALITY_COLORS[item.quality] || '#fff';
+  const statsHtml = item.stats.length
+    ? `<ul class="stat-list">${item.stats.map(s => `<li>${statLine(s)}</li>`).join('')}</ul>`
+    : '<p class="hint-note" style="padding:0 0 0.8rem;">No stats on this item.</p>';
+
+  const obtain = `How to obtain this item is not yet known — item information is most likely datamined.`;
+
+  results.innerHTML = `
+    <div class="detail-panel">
+      <button class="detail-back" id="detailBack">‹ Back to items</button>
+      <div class="detail-name" style="color:${color}">${item.name}</div>
+      <div class="detail-meta">
+        ilvl ${item.item_level}${item.required_level ? ' · requires level ' + item.required_level : ''}
+        ${item.material ? ' · ' + item.material : ''}
+        ${item.change_status !== 'unchanged' ? ' · <span style="color:var(--gold)">' + item.change_status + ' vs Classic Era</span>' : ''}
+      </div>
+      ${statsHtml}
+      <div class="obtain-box">${obtain}</div>
+      <a class="wowhead-link" href="${item.wowhead_url}" target="_blank" rel="noopener">View on Wowhead →</a>
+    </div>
+  `;
+  document.getElementById('detailBack').addEventListener('click', () => selectSlot(state.selectedSlot));
+}
+
+async function showDiff(id) {
+  let item;
+  try {
+    item = await api(`item/${id}`);
+  } catch (e) {
+    return;
+  }
+  const overlay = document.getElementById('modalOverlay');
+  const body = document.getElementById('modalBody');
+  document.getElementById('modalTitle').textContent = `${item.name} — changed vs Classic Era`;
+
+  const fieldLabel = f => f === 'stats' ? 'Stats' : f.replace(/_/g, ' ');
+  const renderSide = (diffEntry, side) => {
+    const val = diffEntry[side];
+    if (diffEntry.field === 'stats') {
+      if (!val.length) return '<em style="color:var(--ink-dim)">none</em>';
+      return val.map(s => side === 'forever' ? statLine(s) : (s.amount >= 0 ? '+' : '') + s.amount + ' ' + s.name).join('<br>');
+    }
+    return String(val);
+  };
+
+  body.innerHTML = `
+    <div class="diff-col-head">Classic Era</div>
+    <div class="diff-col-head">Forever (beta)</div>
+    ${(item.diff || []).map(d => `
+      <div class="diff-field" style="grid-column:1 / -1;"><span class="diff-field-name">${fieldLabel(d.field)}</span></div>
+      <div class="diff-field">${renderSide(d, 'classic')}</div>
+      <div class="diff-field">${renderSide(d, 'forever')}</div>
+    `).join('')}
+  `;
+  overlay.classList.remove('hidden');
+}
+
+document.getElementById('modalClose').addEventListener('click', () => document.getElementById('modalOverlay').classList.add('hidden'));
+document.getElementById('modalOverlay').addEventListener('click', e => {
+  if (e.target.id === 'modalOverlay') e.currentTarget.classList.add('hidden');
+});
+
+(async function init() {
+  try {
+    const [meta, classes, slots] = await Promise.all([api('meta'), api('classes'), api('slots')]);
+    renderBanner(meta);
+    state.classes = classes;
+    state.slots = slots;
+    renderClasses();
+  } catch (e) {
+    document.getElementById('banner').innerHTML =
+      `<strong>Couldn't load build info</strong> — ${e.message}. Has the ingest run yet? (<code>python -m ingest.run</code>)`;
+  }
+})();
+</script>
+</body>
+</html>
