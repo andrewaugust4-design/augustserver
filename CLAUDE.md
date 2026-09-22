@@ -26,20 +26,28 @@ homepage/index.html.
 NOT in the repo (gitignored, machine-specific): venv/, data/, .env, .cache/
 
 ## Homepage navigation structure
-The homepage SPA has two top-level hub pages reached from the sidebar (`#tools`,
-`#gaming`) plus `#home`. Individual tools/sections are NOT listed directly in the
-sidebar or on the home page anymore — they're cards inside their hub's section.
+The homepage SPA has three top-level hub pages reached from the sidebar (`#tools`,
+`#gaming`, `#wowforever`) plus `#home`. Individual tools/sections are NOT listed
+directly in the sidebar or on the home page — they're cards inside their hub's
+section.
 - **Tools hub** (`section-tools`, icon-blue "Tools" nav item): card grid of the
-  FastAPI tools below. Each card is a plain `<a href="/<tool>/">` (no data-section)
-  so the SPA router leaves it alone.
+  single-app FastAPI tools below (musicreview/paste/imagetools/drop/convert/video).
+  Each card is a plain `<a href="/<tool>/">` (no data-section) so the SPA router
+  leaves it alone.
 - **General Gaming hub** (`section-gaming`, icon-green "General Gaming" nav item):
   card grid linking to in-SPA sections `status` (Server Status) and `cs2` (CS2
   Settings) via `data-section` home-cards.
+- **WoW: Forever hub** (`section-wowforever`, icon-gold "WoW: Forever" nav item):
+  card grid of WoW: Forever sub-tools (currently just Gear Browser at
+  `/wow/gear/`), same plain-`<a>` pattern as the Tools hub. Unlike the other two
+  tools categories, WoW: Forever is a multi-tool **suite** — one FastAPI app at
+  `/opt/wow` shares a data layer across sub-tools; see `wow/README.md`. New WoW
+  sub-tools get a card here, not a new top-level hub.
 - Sub-sections reached only through a hub (status, cs2) get a `.back-link` at the
   top pointing back to their hub (`data-section="gaming"`), and each hub section
   gets a `.back-link` back to `home`. The JS `navGroup` map keeps the parent hub's
   sidebar nav item highlighted while viewing one of its sub-sections.
-- Home page itself now just has two home-cards: "Tools" and "General Gaming".
+- Home page itself just has three home-cards: "Tools", "General Gaming", "WoW: Forever".
 
 ## The tools (each has its own port, color, "‹ Back to August." link)
 | Tool        | Path          | Port | Color  |
@@ -50,8 +58,9 @@ sidebar or on the home page anymore — they're cards inside their hub's section
 | drop        | /drop/        | 8062 | orange |
 | convert     | /convert/     | 8063 | lime   |
 | video       | /video/       | 8064 | red    |
-Next free port: 8065. Card color order inside the Tools hub: amber→teal→rose→orange→lime→red.
-Top-level sidebar icons: purple (Home) → blue (Tools) → green (General Gaming).
+| wow         | /wow/         | 8065 | gold   |  (suite; see wow/README.md)
+Next free port: 8066. Card color order inside the Tools hub: amber→teal→rose→orange→lime→red.
+Top-level sidebar icons: purple (Home) → blue (Tools) → green (General Gaming) → gold (WoW: Forever).
 
 ## Conventions for a NEW tool
 1. FastAPI in app/main.py, UI in app/static/index.html, plus __init__.py,

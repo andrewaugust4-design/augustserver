@@ -13,7 +13,7 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-TOOLS=(musicreview imagetools drop convert video)
+TOOLS=(musicreview imagetools drop convert video wow)
 
 deploy_homepage() {
   echo "==> homepage/index.html -> /var/www/augustserver/index.html"
@@ -35,6 +35,19 @@ deploy_tool() {
   sudo systemctl --no-pager --lines=0 status "$tool"
 }
 
+# wow/ isn't a single app/ dir like the other tools -- it also has ingest/
+# and common/ as siblings that the app imports at runtime, so sync the whole
+# tool directory (minus the local-only venv/data/.env) instead of just app/.
+deploy_wow() {
+  echo "==> wow/ -> /opt/wow/"
+  sudo rsync -a --delete \
+    --exclude venv/ --exclude data/ --exclude .env --exclude __pycache__/ \
+    wow/ /opt/wow/
+  echo "==> restarting wow.service"
+  sudo systemctl restart wow
+  sudo systemctl --no-pager --lines=0 status wow
+}
+
 target="${1:-}"
 
 if [[ -z "$target" ]]; then
@@ -49,8 +62,11 @@ case "$target" in
   all)
     deploy_homepage
     for t in "${TOOLS[@]}"; do
-      deploy_tool "$t"
+      if [[ "$t" == "wow" ]]; then deploy_wow; else deploy_tool "$t"; fi
     done
+    ;;
+  wow)
+    deploy_wow
     ;;
   *)
     if printf '%s\n' "${TOOLS[@]}" | grep -qx "$target"; then
