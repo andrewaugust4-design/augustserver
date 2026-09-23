@@ -437,7 +437,9 @@ async def gear_set_page(slug: str) -> FileResponse:
 # data is server-side and the client's QuestV2 is id-only.
 
 QUEST_SORTS = {"zone": "zone IS NULL, zone, min_level, name", "level": "min_level IS NULL, min_level, zone, name",
-               "name": "name IS NULL, name, id", "id": "id"}
+               "name": "name IS NULL, name, id", "id": "id",
+               "xp": "xp IS NULL, xp DESC, min_level, name",
+               "objectives": "objective_count IS NULL, objective_count, xp DESC, name"}
 PAGE_MAX = 200
 
 
@@ -463,6 +465,9 @@ def _quest_summary(row: sqlite3.Row) -> dict:
         "id": row["id"], "name": row["name"], "zone": row["zone"], "subzone": row["subzone"],
         "req_level": row["min_level"], "quest_level": row["quest_level"], "faction": row["faction"],
         "status": row["status"], "revealed": bool(row["revealed"]),
+        # Full at-level XP (QuestieDB); None when it lists none or the quest isn't revealed.
+        "xp": row["xp"] if "xp" in row.keys() else None,
+        "objective_count": row["objective_count"] if "objective_count" in row.keys() else None,
     }
 
 
@@ -533,6 +538,8 @@ def quest_meta() -> dict:
         "classic_unrevealed": int(m.get("quests_classic_unrevealed", 0)),
         "new_with_zone": int(m.get("quests_new_with_zone", 0)),
         "questiedb_version": m.get("quests_questiedb_version"),
+        "xp_checked": int(m.get("quests_xp_checked", 0)),
+        "xp_matched": int(m.get("quests_xp_matched", 0)),
     }
 
 

@@ -76,6 +76,8 @@
   .qname.unknown { color: var(--ink-dim); font-style: italic; font-weight: 400; }
   .sub { font-size: 0.72rem; color: var(--ink-dim); }
   .lvl { font-family: var(--mono); white-space: nowrap; }
+  th.num, td.num { text-align: right; font-family: var(--mono); white-space: nowrap; }
+  .caption { font-size: 0.72rem; color: var(--ink-dim); margin-bottom: 0.6rem; }
   .fac { font-family: var(--mono); font-size: 0.7rem; }
   .fac.alliance { color: var(--alliance); }
   .fac.horde { color: var(--horde); }
@@ -136,6 +138,8 @@
   </div>
 
   <div class="count" id="count"></div>
+  <div class="caption">XP is the full reward for a character near the quest's level. You get less once you out-level a quest by several levels.
+    Obj. counts objective lines, a rough guide to effort. Click XP to sort by it.</div>
   <div class="layout">
     <div>
       <table>
@@ -143,6 +147,8 @@
           <th class="sortable" data-sort="name">Quest</th>
           <th class="sortable sorted" data-sort="zone">Zone</th>
           <th class="sortable" data-sort="level">Level</th>
+          <th class="sortable num" data-sort="xp" title="Full XP at the quest's level. It drops once you out-level the quest by several levels.">XP</th>
+          <th class="sortable num" data-sort="objectives" title="Number of objective lines (kill / use / collect). A rough effort guide: 0 means talk-to or delivery.">Obj.</th>
           <th>Faction</th>
           <th></th>
         </tr></thead>
@@ -240,6 +246,8 @@ function rowHtml(r) {
     <td><span class="qname">${questName(r)}</span></td>
     <td>${zone}</td>
     <td class="lvl">${lvl}</td>
+    <td class="num">${r.xp ? r.xp.toLocaleString() : '<span class="sub">—</span>'}</td>
+    <td class="num">${r.objective_count ?? '<span class="sub">—</span>'}</td>
     <td>${fac}</td>
     <td>${r.status === 'new' ? '<span class="badge">New to Forever</span>' : ''}</td>
   </tr>`;
@@ -247,7 +255,7 @@ function rowHtml(r) {
 
 function render() {
   document.getElementById('rows').innerHTML = state.rows.map(rowHtml).join('') ||
-    '<tr><td colspan="5" class="empty">No quests match these filters.</td></tr>';
+    '<tr><td colspan="7" class="empty">No quests match these filters.</td></tr>';
   document.querySelectorAll('tr.q').forEach(tr => tr.addEventListener('click', () => showQuest(Number(tr.dataset.id))));
   document.getElementById('count').textContent = `${state.total.toLocaleString()} quests · showing ${state.rows.length.toLocaleString()}`;
   const more = document.getElementById('more');
@@ -264,7 +272,7 @@ async function load(page = 1) {
   try {
     data = await api('quests?' + p.toString());
   } catch (e) {
-    document.getElementById('rows').innerHTML = `<tr><td colspan="5" class="empty">Couldn't load quests: ${esc(e.message)}</td></tr>`;
+    document.getElementById('rows').innerHTML = `<tr><td colspan="7" class="empty">Couldn't load quests: ${esc(e.message)}</td></tr>`;
     return;
   }
   if (seq !== state.seq) return;  // a newer filter change won
@@ -348,7 +356,8 @@ document.querySelectorAll('th.sortable').forEach(th => th.addEventListener('clic
       `<strong>Beta data</strong> — Forever build ${esc(meta.forever_build)} vs Classic Era ${esc(meta.classic_era_build)}. ` +
       `The client only lists quest <em>ids</em>: that's how the ${meta.new_count.toLocaleString()} "New to Forever" quests are found, ` +
       `but their names, levels, text and rewards are server-side and not yet revealed. Carryover quest details and rewards come from QuestieDB ${esc(meta.questiedb_version || '')}.` +
-      `<span class="meta-line">${meta.classic_detailed.toLocaleString()} carryover quests with details · ${meta.new_count.toLocaleString()} new · refreshed ${refreshed}</span>`;
+      `<span class="meta-line">${meta.classic_detailed.toLocaleString()} carryover quests with details · ${meta.new_count.toLocaleString()} new · ` +
+      `XP checked against the client's QuestXP table: ${meta.xp_matched.toLocaleString()}/${meta.xp_checked.toLocaleString()} · refreshed ${refreshed}</span>`;
     document.getElementById('zone').innerHTML += zones.map(z =>
       `<option value="${esc(z.zone)}">${esc(z.zone)} (${z.count}${z.new ? `, ${z.new} new` : ''})</option>`).join('');
   } catch (e) {

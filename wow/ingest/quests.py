@@ -13,6 +13,11 @@ Sources (checked 2026-09-23, Forever 1.60.1.69977 vs Era 1.15.9.69722):
 - **Carryover detail + rewards: QuestieDB** (ingest/questiedb.py) — name,
   zone, levels, races → faction, classes, objectives, quest giver / turn-in,
   chain, reward items, XP, reputation.
+- **XP** is QuestieDB's full at-level reward. The client's QuestXP DB2
+  (level × difficulty tier; identical in Forever and Era) can't compute it on
+  its own because the tier is server-side, so it's the cross-check instead:
+  every QuestieDB value must be one of its level's tier cells (3,490/3,490 on
+  2026-09-23). Quests QuestieDB gives no XP for show none rather than a guess.
 - **What QuestieDB lacks**, from the cmangos 1.12 reference
   (reference/vanilla_quests.json.gz): the long description, which reward
   items are choose-one vs guaranteed (+ counts), and money.
@@ -35,7 +40,7 @@ from .wago_client import read_csv
 REFERENCE = Path(__file__).resolve().parent.parent / "reference" / "vanilla_quests.json.gz"
 
 FOREVER_TABLES = ("QuestV2", "QuestSort", "AreaTable", "QuestPOIBlob", "UiMap", "QuestLine", "QuestLineXQuest",
-                  "Faction")
+                  "Faction", "QuestXP")
 ERA_TABLES = ("QuestV2", "AreaTable")
 
 # Vanilla race bits (1 << raceId-1): Alliance = Human, Dwarf, Night Elf, Gnome.
@@ -72,6 +77,16 @@ def _areas(*build_dirs: Path) -> dict[int, tuple[str, int]]:
         for r in read_csv(d / "AreaTable.csv"):
             out[int(r["ID"])] = (r["AreaName_lang"], int(r["ParentAreaID"] or 0))
     return out
+
+
+def xp_check(forever_dir: Path, qdb: dict) -> dict:
+    """How many QuestieDB XP values are a real QuestXP[level][tier] cell."""
+    tiers = {int(r["ID"]): {int(v) for k, v in r.items() if k.startswith("Difficulty_")}
+             for r in read_csv(forever_dir / "QuestXP.csv")}
+    checked = [(qid, lvl, qdb["xp"][qid]) for qid, lvl in qdb["xp_level"].items()
+               if lvl in tiers and qdb["xp"].get(qid)]
+    bad = [(qid, lvl, xp) for qid, lvl, xp in checked if xp not in tiers[lvl]]
+    return {"xp_checked": len(checked), "xp_matched": len(checked) - len(bad), "xp_mismatches": bad[:10]}
 
 
 def build_quests(forever_dir: Path, era_dir: Path, qdb: dict) -> tuple[list[tuple], dict]:
@@ -200,13 +215,17 @@ def build_quests(forever_dir: Path, era_dir: Path, qdb: dict) -> tuple[list[tupl
             quest_level = q.get("questLevel") if (q.get("questLevel") or 0) > 0 else None
             races = q.get("requiredRaces") or 0
             faction = faction_of(races)
+            xp = reward["xp"] or None
+            objective_count = len(detail["objectives"])
         else:
             zone, subzone = poi_zone.get(qid), None
             detail, name, min_level, quest_level, races, faction = {}, None, None, None, None, None
+            xp = objective_count = None
         if qid in quest_line:
             detail["quest_line"], detail["quest_line_step"] = quest_line[qid]
         rows.append((qid, name, status, int(revealed), int(in_client), zone, subzone, min_level, quest_level,
-                     faction, races, "questiedb" if q else "client", json.dumps(detail) if detail else None))
+                     faction, races, "questiedb" if q else "client", json.dumps(detail) if detail else None, xp,
+                     objective_count))
     stats["new_with_zone"] = sum(1 for r in rows if r[2] == "new" and r[5])
     stats["questiedb_version"] = qdb["version"]
     return rows, stats
@@ -244,7 +263,9 @@ CREATE TABLE quests (
     faction TEXT,
     races_mask INTEGER,
     source TEXT NOT NULL,
-    detail_json TEXT
+    detail_json TEXT,
+    xp INTEGER,
+    objective_count INTEGER
 );
 CREATE INDEX idx_quests_zone ON quests(zone);
 CREATE INDEX idx_quests_status ON quests(status);
@@ -255,7 +276,7 @@ def write_tables(conn, rows: list[tuple]) -> None:
     for statement in SCHEMA.split(";"):
         if statement.strip():
             conn.execute(statement)
-    conn.executemany("INSERT INTO quests VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+    conn.executemany("INSERT INTO quests VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
 
 
 def fetch_questiedb(cache_dir: Path) -> dict:

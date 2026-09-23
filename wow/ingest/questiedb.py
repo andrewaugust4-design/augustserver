@@ -115,9 +115,12 @@ def load(qdir: Path) -> dict:
     okeys = assigned_table(obj_src, "QuestieDB.objectKeys")
     objects = {oid: o.get(okeys["name"]) for oid, o in embedded_data(obj_src, "QuestieDB.objectData").items()}
 
-    xp = {qid: row.get(2) for qid, row in assigned_table(_read(qdir, "xp"), "QuestXP.db").items()}
+    # QuestXP.db rows are {level, xp}: the full at-level reward and the level it's tiered by.
+    xp_rows = assigned_table(_read(qdir, "xp"), "QuestXP.db")
+    xp = {qid: row.get(2) for qid, row in xp_rows.items()}
+    xp_level = {qid: row.get(1) for qid, row in xp_rows.items()}
     return {"quests": quests, "item_names": item_names, "reward_items": dict(reward_items),
-            "npcs": npcs, "objects": objects, "xp": xp, "version": version(qdir)}
+            "npcs": npcs, "objects": objects, "xp": xp, "xp_level": xp_level, "version": version(qdir)}
 
 
 def values(tbl) -> list:

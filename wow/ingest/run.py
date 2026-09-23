@@ -132,6 +132,13 @@ def main() -> None:
     log.info("Quests: %s", quest_stats)
     for problem in quests.check_anchors(quest_rows):
         log.error("Quest anchor FAILED: %s", problem)
+    xp = quests.xp_check(CACHE_DIR / forever_version, qdb)
+    if xp["xp_mismatches"]:
+        log.error("Quest XP check: %d/%d QuestieDB values aren't a QuestXP tier cell, e.g. %s",
+                  xp["xp_checked"] - xp["xp_matched"], xp["xp_checked"], xp["xp_mismatches"])
+    else:
+        log.info("Quest XP check: %d/%d QuestieDB values match the QuestXP table", xp["xp_matched"], xp["xp_checked"])
+    quest_stats.update(xp_checked=xp["xp_checked"], xp_matched=xp["xp_matched"])
     meta.update({f"quests_{k}": str(v) for k, v in quest_stats.items()})
 
     character = load_character_data(CACHE_DIR / forever_version)

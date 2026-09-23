@@ -335,6 +335,17 @@ The API is `/api/quests`, `/api/quests/zones`, `/api/quests/meta` and
   are re-read every refresh.
 - **Wowhead is a human link-out only, never fetched by the tool.** Its
   robots.txt disallows automated agents anyway.
+- **XP column.** It shows the *base at-level reward*: the full XP for a
+  character near the quest's level, from QuestieDB. Characters well above
+  the quest's level get less, and the table's caption says so. The client's
+  `QuestXP` DB2 (level × difficulty tier, byte-identical in Forever and Era)
+  can't compute XP on its own because each quest's tier is server-side. It's
+  used as a cross-check instead: every QuestieDB value must be one of its
+  level's tier cells (3,490/3,490 on 2026-09-23). The count is logged each
+  ingest and shown in the banner. The 754 detailed quests QuestieDB gives no
+  XP for show "—" rather than a guess. The "Obj." column counts objective
+  lines (kill/use/collect) as a rough effort guide, with 0 meaning talk-to or
+  delivery. Both columns sort.
 - **Reward item icons** use the suite's `/api/icon/<id>` cache, and names and
   quality come from the Forever client's ItemSparse.
 - **Unidentified carryover ids.** 1,273 carryover ids from Era's client
