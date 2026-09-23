@@ -14,7 +14,10 @@ What we take (field numbers are the files' own questKeys/itemKeys/npcKeys):
   exclusiveTo, breadcrumbs), zoneOrSort, reputationReward
 - items: name, and questRewards (item → quests), inverted to give each
   quest's reward items
-- npcs/objects: names (+ NPC zone), for quest givers / turn-ins / objectives
+- npcs/objects: names (+ NPC zone), for quest givers / turn-ins / objectives,
+  and their spawns ({AreaTable zone id: [(x, y), ...]}, 0–100 in that zone's
+  map) for the guide route map
+- items: npcDrops / objectDrops (else vendors), to place "collect" objectives on the map
 - QuestXP: quest XP
 
 QuestieDB has no money reward and doesn't say which reward items are
@@ -102,6 +105,14 @@ def load(qdir: Path) -> dict:
     ikeys = assigned_table(item_src, "QuestieDB.itemKeys")
     items = embedded_data(item_src, "QuestieDB.itemData")
     item_names = {iid: it.get(ikeys["name"]) for iid, it in items.items()}
+    # Where an item comes from: dropping NPCs/objects, or (only when it drops nowhere) vendors.
+    item_sources = {}
+    for iid, it in items.items():
+        npcs, objs = values(it.get(ikeys["npcDrops"])), values(it.get(ikeys["objectDrops"]))
+        if not (npcs or objs):
+            npcs = values(it.get(ikeys["vendors"]))
+        if npcs or objs:
+            item_sources[iid] = (npcs, objs)
     reward_items: dict[int, list[int]] = defaultdict(list)
     for iid, it in items.items():
         for qid in (it.get(ikeys["questRewards"]) or {}).values():
@@ -109,18 +120,35 @@ def load(qdir: Path) -> dict:
 
     npc_src = _read(qdir, "npcs")
     nkeys = assigned_table(npc_src, "QuestieDB.npcKeys")
-    npcs = {nid: (n.get(nkeys["name"]), n.get(nkeys["zoneID"])) for nid, n in embedded_data(npc_src, "QuestieDB.npcData").items()}
+    npc_rows = embedded_data(npc_src, "QuestieDB.npcData")
+    npcs = {nid: (n.get(nkeys["name"]), n.get(nkeys["zoneID"])) for nid, n in npc_rows.items()}
+    npc_spawns = {nid: spawns(n.get(nkeys["spawns"])) for nid, n in npc_rows.items() if n.get(nkeys["spawns"])}
 
     obj_src = _read(qdir, "objects")
     okeys = assigned_table(obj_src, "QuestieDB.objectKeys")
-    objects = {oid: o.get(okeys["name"]) for oid, o in embedded_data(obj_src, "QuestieDB.objectData").items()}
+    obj_rows = embedded_data(obj_src, "QuestieDB.objectData")
+    objects = {oid: o.get(okeys["name"]) for oid, o in obj_rows.items()}
+    object_spawns = {oid: spawns(o.get(okeys["spawns"])) for oid, o in obj_rows.items() if o.get(okeys["spawns"])}
 
     # QuestXP.db rows are {level, xp}: the full at-level reward and the level it's tiered by.
     xp_rows = assigned_table(_read(qdir, "xp"), "QuestXP.db")
     xp = {qid: row.get(2) for qid, row in xp_rows.items()}
     xp_level = {qid: row.get(1) for qid, row in xp_rows.items()}
     return {"quests": quests, "item_names": item_names, "reward_items": dict(reward_items),
-            "npcs": npcs, "objects": objects, "xp": xp, "xp_level": xp_level, "version": version(qdir)}
+            "npcs": npcs, "objects": objects, "xp": xp, "xp_level": xp_level, "version": version(qdir),
+            "npc_spawns": npc_spawns, "object_spawns": object_spawns, "item_sources": item_sources}
+
+
+def spawns(tbl) -> dict[int, list[tuple[float, float]]]:
+    """{[zoneID] = {{x, y}, ...}} → {zone: [(x, y), ...]}; drops malformed pairs
+    and Questie's (-1, -1) "somewhere in this instance" marker."""
+    out = {}
+    for zone, pairs in (tbl or {}).items():
+        pts = [(float(v[0]), float(v[1])) for v in (values(p) for p in values(pairs))
+               if len(v) >= 2 and isinstance(v[0], (int, float)) and isinstance(v[1], (int, float)) and v[0] >= 0]
+        if pts:
+            out[int(zone)] = pts
+    return out
 
 
 def values(tbl) -> list:

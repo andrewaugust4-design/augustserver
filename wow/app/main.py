@@ -660,7 +660,10 @@ def save_guide(guide: Guide, request: Request) -> dict:
 
 @app.get("/api/guide/{slug}")
 def load_guide(slug: str) -> dict:
-    """The saved guide with each step's current quest detail (None = no longer in the data)."""
+    """The saved guide with each step's current quest detail (None = no longer
+    in the data) and route: giver → objective areas → turn-in, each area on a
+    zone map (`map` = UiMap id, None = no zone map, e.g. an instance). `maps`
+    describes every map used, with `image` None where there's no art yet."""
     found = sets.load_guide(slug) if slug.isalnum() and len(slug) <= 16 else None
     if found is None:
         raise HTTPException(status_code=404, detail="No saved guide with that link.")
@@ -669,9 +672,16 @@ def load_guide(slug: str) -> dict:
         steps = []
         for step in guide["steps"]:
             row = conn.execute("SELECT * FROM quests WHERE id = ?", (step["quest_id"],)).fetchone()
-            steps.append({**step, "quest": _quest_payload(conn, row) if row else None})
+            route = json.loads(row["route_json"]) if row and "route_json" in row.keys() and row["route_json"] else None
+            steps.append({**step, "quest": _quest_payload(conn, row) if row else None, "route": route})
+    index = _map_index()
+    used = {a["map"]: a.get("zone_name") for st in steps if st["route"] for role in ("giver", "objectives", "turnin")
+            for stop in st["route"][role] for a in stop["areas"] if a["map"]}
+    maps = {m: {"name": index[m]["name"] if m in index else used[m], "image": f"maps/{m}.png" if m in index else None,
+                "width": index.get(m, {}).get("width", 1002), "height": index.get(m, {}).get("height", 668)}
+            for m in sorted(used)}
     return {"id": slug, "title": guide.get("title"), "faction": guide.get("faction"),
-            "created_at": created_at, "steps": steps}
+            "created_at": created_at, "steps": steps, "maps": maps}
 
 
 @app.get("/quests/guide/{slug}")

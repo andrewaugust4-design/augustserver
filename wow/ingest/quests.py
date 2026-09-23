@@ -18,6 +18,10 @@ Sources (checked 2026-09-23, Forever 1.60.1.69977 vs Era 1.15.9.69722):
   its own because the tier is server-side, so it's the cross-check instead:
   every QuestieDB value must be one of its level's tier cells (3,490/3,490 on
   2026-09-23). Quests QuestieDB gives no XP for show none rather than a guess.
+- **Route map points** (guide page): giver, objective area(s) and turn-in
+  from QuestieDB spawns (NPC/object spawns, item drop sources, triggerEnd /
+  extraObjectives locations), in each zone's 0–100 map space. Zones resolve
+  to Era UiMap ids (UiMapAssignment), the same maps ingest/maps.py renders.
 - **What QuestieDB lacks**, from the cmangos 1.12 reference
   (reference/vanilla_quests.json.gz): the long description, which reward
   items are choose-one vs guaranteed (+ counts), and money.
@@ -41,7 +45,7 @@ REFERENCE = Path(__file__).resolve().parent.parent / "reference" / "vanilla_ques
 
 FOREVER_TABLES = ("QuestV2", "QuestSort", "AreaTable", "QuestPOIBlob", "UiMap", "QuestLine", "QuestLineXQuest",
                   "Faction", "QuestXP")
-ERA_TABLES = ("QuestV2", "AreaTable")
+ERA_TABLES = ("QuestV2", "AreaTable", "UiMap", "UiMapAssignment")
 
 # Vanilla race bits (1 << raceId-1): Alliance = Human, Dwarf, Night Elf, Gnome.
 ALLIANCE_RACES = 1 | 4 | 8 | 64
@@ -57,6 +61,13 @@ ANCHORS = {
 }
 
 
+# Route anchors: id -> {role: (UiMap id, x, y)} — the stop's main area must be within 3 units.
+ROUTE_ANCHORS = {
+    7: {"giver": (1429, 48.9, 41.6), "objectives": (1429, 49.2, 36.3), "turnin": (1429, 48.9, 41.6)},  # Marshal McBride, Kobold Vermin
+    4641: {"giver": (1411, 43.3, 68.5), "turnin": (1411, 42.1, 68.3)},  # Kaltunk → Gornek, Valley of Trials
+}
+
+
 def faction_of(races: int | None) -> str:
     races = races or 0
     a, h = bool(races & ALLIANCE_RACES), bool(races & HORDE_RACES)
@@ -69,6 +80,16 @@ def _cmangos() -> dict[int, dict]:
     with gzip.open(REFERENCE, "rt", encoding="utf-8") as f:
         doc = json.load(f)
     return {row[0]: dict(zip(doc["columns"], row)) for row in doc["rows"]}
+
+
+def _zone_ui_maps(era_dir: Path) -> dict[int, int]:
+    """AreaTable zone id → Era zone UiMap id (UiMap Type 3), the maps ingest/maps.py renders."""
+    zones = {int(r["ID"]) for r in read_csv(era_dir / "UiMap.csv") if r["Type"] == "3"}
+    out: dict[int, int] = {}
+    for r in read_csv(era_dir / "UiMapAssignment.csv"):
+        if int(r["UiMapID"]) in zones and int(r["AreaID"]):
+            out.setdefault(int(r["AreaID"]), int(r["UiMapID"]))
+    return out
 
 
 def _areas(*build_dirs: Path) -> dict[int, tuple[str, int]]:
@@ -87,6 +108,119 @@ def xp_check(forever_dir: Path, qdb: dict) -> dict:
                if lvl in tiers and qdb["xp"].get(qid)]
     bad = [(qid, lvl, xp) for qid, lvl, xp in checked if xp not in tiers[lvl]]
     return {"xp_checked": len(checked), "xp_matched": len(checked) - len(bad), "xp_mismatches": bad[:10]}
+
+
+ROUTE_LINK = 4.0          # map units (0–100): spawns closer than this are one area
+ROUTE_MAX_AREAS = 3       # objective areas kept per objective
+ROUTE_SPREAD = 40         # spawn dots kept per objective, for the faint "where they are" layer
+
+
+def _clusters(pts: list[tuple[int, float, float]], home: set[int] = frozenset()) -> list[dict]:
+    """(zone, x, y) points → areas {zone, x, y, n}, biggest first. Single-link
+    grouping on a grid, per zone; small stragglers (<25% of the biggest) drop.
+    If any area is in a `home` zone (the quest's / giver's), only those count:
+    a mob that also lives two zones over isn't where this quest sends you."""
+    if home and any(z in home for z, _, _ in pts):
+        pts = [p for p in pts if p[0] in home]
+    parent = list(range(len(pts)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    grid: dict[tuple, list[int]] = {}
+    for i, (z, x, y) in enumerate(pts):
+        grid.setdefault((z, int(x // ROUTE_LINK), int(y // ROUTE_LINK)), []).append(i)
+    for (z, gx, gy), members in grid.items():
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for j in grid.get((z, gx + dx, gy + dy), []):
+                    for i in members:
+                        if (pts[i][1] - pts[j][1]) ** 2 + (pts[i][2] - pts[j][2]) ** 2 <= ROUTE_LINK ** 2:
+                            parent[find(i)] = find(j)
+    groups: dict[int, list[int]] = {}
+    for i in range(len(pts)):
+        groups.setdefault(find(i), []).append(i)
+    areas = sorted(({"zone": pts[g[0]][0], "x": round(sum(pts[i][1] for i in g) / len(g), 2),
+                     "y": round(sum(pts[i][2] for i in g) / len(g), 2), "n": len(g)} for g in groups.values()),
+                   key=lambda a: -a["n"])
+    return [a for a in areas if a["n"] * 4 >= areas[0]["n"]][:ROUTE_MAX_AREAS] if areas else []
+
+
+def _flatten(spawns: dict) -> list[tuple[int, float, float]]:
+    return [(z, x, y) for z, pairs in spawns.items() for x, y in pairs]
+
+
+def build_route(q: dict, qdb: dict, zone_map, item_name) -> dict:
+    """Giver → objectives → turn-in stops for the guide map. Each stop has
+    `areas` (cluster centres, biggest first) with zone = AreaTable id; empty
+    areas = no known location. `spread` is a sample of the raw spawn points."""
+    def entity_pts(kind: int, eid) -> list[tuple[int, float, float]]:
+        if kind == 1:
+            return _flatten(qdb["npc_spawns"].get(eid, {}))
+        if kind == 2:
+            return _flatten(qdb["object_spawns"].get(eid, {}))
+        npcs, objs = qdb["item_sources"].get(eid, ([], []))  # an item: where it drops
+        return [p for n in npcs for p in _flatten(qdb["npc_spawns"].get(n, {}))] + \
+               [p for o in objs for p in _flatten(qdb["object_spawns"].get(o, {}))]
+
+    def names(kind: int, eid) -> str:
+        if kind == 1:
+            return qdb["npcs"].get(eid, (f"NPC {eid}",))[0] or f"NPC {eid}"
+        if kind == 2:
+            return qdb["objects"].get(eid) or f"Object {eid}"
+        return item_name(eid)
+
+    home: set[int] = set()
+
+    def stop(role: str, label: str, pts: list) -> dict:
+        areas = _clusters(pts, home)
+        if role == "objective":
+            pts = [p for p in pts if p[0] in {a["zone"] for a in areas}]
+        step = max(1, len(pts) // ROUTE_SPREAD)
+        out = {"role": role, "label": label, "areas": areas}
+        if role == "objective" and len(pts) > 1:
+            out["spread"] = [[z, x, y] for z, x, y in pts[::step][:ROUTE_SPREAD]]
+        return out
+
+    def ends(role: str, tbl) -> list[dict]:
+        tbl = tbl or {}
+        out = []
+        for kind, verb in ((1, ""), (2, ""), (3, "Drops: " if role == "giver" else "")):
+            for eid in values(tbl.get(kind)):
+                out.append(stop(role, verb + names(kind, eid), entity_pts(kind, eid)))
+        return out[:3]
+
+    givers = ends("giver", q.get("startedBy"))
+    home.update(z for z in [q.get("zoneOrSort")] if z and z > 0)
+    home.update(a["zone"] for s in givers for a in s["areas"][:1])
+    objectives = []
+    obj = q.get("objectives") or {}
+    for kind, verb in ((1, "Slay"), (2, "Use"), (3, "Collect")):
+        for entry in values(obj.get(kind)):
+            eid = values(entry)[0] if values(entry) else None
+            if eid is None:
+                continue
+            text = entry.get(2) if isinstance(entry, dict) else None
+            objectives.append(stop("objective", f"{verb}: {text or names(kind, eid)}", entity_pts(kind, eid)))
+    trigger = q.get("triggerEnd")
+    if trigger:
+        objectives.append(stop("objective", trigger.get(1) or "Explore", _flatten(questiedb.spawns(trigger.get(2)))))
+    for extra in values(q.get("extraObjectives")):
+        if isinstance(extra, dict) and extra.get(1):
+            objectives.append(stop("objective", extra.get(3) or "Objective", _flatten(questiedb.spawns(extra.get(1)))))
+
+    route = {"giver": givers, "objectives": objectives,
+             "turnin": ends("turnin", q.get("finishedBy"))}
+    # Zone ids → Era UiMap ids (None = no zone map, e.g. an instance) + a zone name for the UI.
+    for s in route["giver"] + route["objectives"] + route["turnin"]:
+        for a in s["areas"]:
+            a["map"], a["zone_name"] = zone_map(a["zone"])
+        if "spread" in s:
+            s["spread"] = [[zone_map(z)[0], x, y] for z, x, y in s["spread"]]
+    return route
 
 
 def build_quests(forever_dir: Path, era_dir: Path, qdb: dict) -> tuple[list[tuple], dict]:
@@ -108,6 +242,11 @@ def build_quests(forever_dir: Path, era_dir: Path, qdb: dict) -> tuple[list[tupl
     # Reward item names/quality from the Forever client where it has them (it covers non-gear too).
     item_info = {int(r["ID"]): (r.get("Display_lang") or "", int(r.get("OverallQualityID") or 1))
                  for r in read_csv(forever_dir / "ItemSparse.csv")}
+
+    zone_ui_map = _zone_ui_maps(era_dir)
+
+    def zone_map(area_id: int) -> tuple[int | None, str | None]:
+        return zone_ui_map.get(area_id), area_name(area_id)
 
     def area_name(area_id) -> str | None:
         return areas.get(area_id, (None, 0))[0] if area_id else None
@@ -175,7 +314,7 @@ def build_quests(forever_dir: Path, era_dir: Path, qdb: dict) -> tuple[list[tupl
     rows = []
     stats = {"new": 0, "classic_detailed": 0, "classic_unrevealed": 0, "detailed_not_in_client": 0,
              "vanilla_added_to_client": 0, "removed_from_forever": len(era_ids - forever_ids),
-             "with_reward_items": 0}
+             "with_reward_items": 0, "routes_with_points": 0}
     for qid in sorted(forever_ids | set(quests_qdb)):
         q = quests_qdb.get(qid)
         in_client = qid in forever_ids
@@ -217,15 +356,18 @@ def build_quests(forever_dir: Path, era_dir: Path, qdb: dict) -> tuple[list[tupl
             faction = faction_of(races)
             xp = reward["xp"] or None
             objective_count = len(detail["objectives"])
+            route = build_route(q, qdb, zone_map, lambda iid: item_ref(iid)["name"])
+            stats["routes_with_points"] += any(a for s in route["giver"] + route["objectives"] + route["turnin"]
+                                               for a in s["areas"])
         else:
             zone, subzone = poi_zone.get(qid), None
             detail, name, min_level, quest_level, races, faction = {}, None, None, None, None, None
-            xp = objective_count = None
+            xp = objective_count = route = None
         if qid in quest_line:
             detail["quest_line"], detail["quest_line_step"] = quest_line[qid]
         rows.append((qid, name, status, int(revealed), int(in_client), zone, subzone, min_level, quest_level,
                      faction, races, "questiedb" if q else "client", json.dumps(detail) if detail else None, xp,
-                     objective_count))
+                     objective_count, json.dumps(route, separators=(",", ":")) if route else None))
     stats["new_with_zone"] = sum(1 for r in rows if r[2] == "new" and r[5])
     stats["questiedb_version"] = qdb["version"]
     return rows, stats
@@ -245,6 +387,12 @@ def check_anchors(rows: list[tuple]) -> list[str]:
             problems.append(f"quest {qid}: expected {reward['xp']} XP, got {rw.get('xp')}")
         if reward and "item" in reward and reward["item"] not in [i["id"] for i in rw.get("items", [])]:
             problems.append(f"quest {qid}: expected reward item {reward['item']}, got {rw.get('items')}")
+    for qid, stops in ROUTE_ANCHORS.items():
+        route = json.loads(by_id[qid][15] or "{}") if qid in by_id else {}
+        for role, (ui_map, x, y) in stops.items():
+            area = next((s["areas"][0] for s in route.get(role, []) if s["areas"]), None)
+            if not area or area["map"] != ui_map or (area["x"] - x) ** 2 + (area["y"] - y) ** 2 > 9:
+                problems.append(f"quest {qid} route {role}: expected map {ui_map} near ({x}, {y}), got {area}")
     return problems
 
 
@@ -265,7 +413,8 @@ CREATE TABLE quests (
     source TEXT NOT NULL,
     detail_json TEXT,
     xp INTEGER,
-    objective_count INTEGER
+    objective_count INTEGER,
+    route_json TEXT
 );
 CREATE INDEX idx_quests_zone ON quests(zone);
 CREATE INDEX idx_quests_status ON quests(status);
@@ -276,7 +425,7 @@ def write_tables(conn, rows: list[tuple]) -> None:
     for statement in SCHEMA.split(";"):
         if statement.strip():
             conn.execute(statement)
-    conn.executemany("INSERT INTO quests VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+    conn.executemany("INSERT INTO quests VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
 
 
 def fetch_questiedb(cache_dir: Path) -> dict:
