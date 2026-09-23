@@ -690,10 +690,14 @@ async def quest_guide_page(slug: str) -> FileResponse:
     return FileResponse(STATIC_DIR / "quests" / "guide.html")
 
 
-@app.get("/quests/quests.js")
-async def quests_js() -> FileResponse:
-    """Rendering helpers shared by the Quest Browser and the guide page."""
-    return FileResponse(STATIC_DIR / "quests" / "quests.js", media_type="text/javascript")
+QUEST_SCRIPTS = {"quests", "routemap"}  # quests.js: shared rendering helpers; routemap.js: guide route map
+
+
+@app.get("/quests/{name}.js")
+async def quests_js(name: str) -> FileResponse:
+    if name not in QUEST_SCRIPTS:
+        raise HTTPException(status_code=404, detail="Not found.")
+    return FileResponse(STATIC_DIR / "quests" / f"{name}.js", media_type="text/javascript")
 
 
 # ── Zone maps (guide route map) ─────────────────────────────────────────────

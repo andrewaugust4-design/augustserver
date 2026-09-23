@@ -394,6 +394,73 @@ until you save. **Save guide** calls `POST /api/guide` with
   storage is blocked, ticking still works for that visit but isn't kept.
 - **XP shown is the base at-level reward** (see above), so a guide's XP total
   is an upper bound for a character who's ahead of the quests.
+- **Route map** (guide page, above the checklist). It plots each zone's part
+  of the guide in the guide's order: quest giver → objective area(s) →
+  turn-in for each step, then a dashed line on to the next step. It doesn't
+  optimise the route, it only draws the order the author chose.
+  - **Markers** are numbered to match the checklist and coloured by role (gold =
+    accept, blue = objective, green = turn in). Faint dots show where the
+    objective mobs or items spawn. Clicking a marker opens its name and
+    outlines the step's card. Each card's "Show on map" button switches to that
+    step's zone and zooms to it. Ticked steps fade on the map.
+  - **Multi-zone guides** get a zone tab per map, in order of first appearance.
+    The first zone is shown by default.
+  - **Leaflet 1.9.4** (cdnjs) with `CRS.Simple`, and the zone PNG as an
+    `ImageOverlay`. QuestieDB's 0–100 coordinates map to
+    `[height × (1 − y/100), width × x/100]`, because the image origin is at the
+    top-left while CRS.Simple's y axis grows upward. Code is in
+    `app/static/quests/routemap.js`.
+  - **Points** come from `ingest/quests.py` (`route_json` column), built from
+    QuestieDB spawns. The quest giver and turn-in are NPC or object spawns, or
+    where a starting item drops. Objectives use kill-target and object spawns,
+    item drop sources (or vendors when an item drops nowhere), and
+    `triggerEnd`/`extraObjectives` locations. Each objective's spawns are
+    grouped into up to 3 areas (4-unit single-link clusters). If any of those
+    are in the quest's own zone or the giver's zone, only those are kept, so
+    Tough Wolf Meat points at Elwynn's wolves, not Dun Morogh's. Anchors
+    checked every ingest: Kobold Camp Cleanup (McBride 48.9,41.6 → Kobold
+    Vermin 49.2,36.3) and Your Place In The World (Kaltunk → Gornek, Durotar).
+    On 2026-09-23, 4,030 of the 4,244 detailed quests had at least one point.
+  - **Fallbacks.** A step with no locations at all (new Forever quests,
+    unavailable ids) says "Not yet mapped". A step missing some parts lists
+    what isn't on the map (crafted, profession and dungeon items, for example)
+    and still draws giver → turn-in. A zone with no art shows a "Map not
+    available for this zone yet" panel instead of the map. If Leaflet fails to
+    load, the section says so. The checklist never depends on the map.
+
+**Zone maps are self-hosted.** They're extracted once from the Classic 1.12
+(Era) client, not from Forever. QuestieDB's coordinates are Classic ones, and
+Forever redrew all 49 zone maps (every tile set differs), so Classic
+coordinates only line up with Classic art. The map and route **cover Classic
+zones only** until Forever zones are captured. The six new Forever zones
+(Mount Hyjal, Darkspear Islands, Zephras Isle, Riverglades, Shen'dralas…) have
+no quest coordinates yet and get the placeholder.
+
+```
+python -m ingest.maps           # one-time; re-run to pick up a new Era build
+```
+
+- `ingest/maps.py` reads `UiMap` (Type 3 = zone) → `UiMapXMapArt` →
+  `UiMapArtTile` (a 4×3 grid of 256px BLP tiles), plus `WorldMapOverlay` /
+  `WorldMapOverlayTile`: the "explored area" art (towns, lakes, roads)
+  composited on top, so the map is fully explored. Each tile is fetched once
+  by FileDataID from wago.tools' file endpoint
+  (`/api/casc/<fdid>?version=<build>`), throttled, and cached in
+  `data/raw/maps/<build>/`. Tiles are decoded with Pillow, stitched and
+  cropped to `UiMapArtStyleLayer`'s 1002×668, which is exactly the zone's
+  0–1 map space, so no per-zone calibration is needed.
+- Output is `data/maps/<UiMap id>.png` (49 zones, about 50 MB) plus
+  `data/maps/index.json` (name, AreaTable id, size, build). `deploy.sh`
+  excludes `data/`, so run the extract on the server itself. The daily
+  ingest doesn't touch these files.
+- The app serves them at `/wow/maps/<id>.png` (30-day cache). The
+  `location /wow/maps/` block in `deploy/nginx-wow.conf` lets nginx serve
+  them straight from disk instead. It's optional.
+- Pillow is a new dependency (`requirements.txt`), used only by the extract.
+- wago.tools' robots.txt disallows automated agents site-wide, the same as
+  for the `/db2/` CSV export the ingest already uses. This is one bulk pull of
+  about 1,400 tiles, identified by User-Agent, and cached, not a crawl.
+
 - `app/static/quests/quests.js` holds the rendering helpers (rewards,
   objectives, icons, `api()`) that the browser and the guide page share.
 

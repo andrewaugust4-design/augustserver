@@ -8,6 +8,7 @@
 <title>Quest Guide — WoW: Forever</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -107,6 +108,45 @@
   .kind { font-family: var(--mono); font-size: 0.62rem; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.06em; }
   .money { font-family: var(--mono); }
   .money .g { color: #e6c24a; } .money .s { color: #c8c8d0; } .money .c { color: #c7844a; }
+
+  /* route map */
+  .route { background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 12px; padding: 0.9rem 1rem 0.8rem; margin-bottom: 1.4rem; }
+  .route > h2 { font-size: 1rem; margin-bottom: 0.6rem; }
+  .zone-tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.6rem; }
+  .zone-tabs button {
+    font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.04em; padding: 0.35rem 0.65rem; border-radius: 999px; cursor: pointer;
+    background: transparent; border: 1px solid var(--panel-edge); color: var(--ink-dim);
+  }
+  .zone-tabs button:hover { color: var(--gold); border-color: var(--gold-dim); }
+  .zone-tabs button[aria-selected=true] { color: var(--gold); border-color: var(--gold); background: rgba(224,168,46,0.12); }
+  .zone-tabs .n { opacity: 0.7; }
+  .map-frame { position: relative; aspect-ratio: 1002 / 668; border-radius: 8px; overflow: hidden; border: 1px solid var(--panel-edge); background: var(--bg); }
+  #routeLeaflet { position: absolute; inset: 0; background: var(--bg); }
+  .map-empty { font-size: 0.84rem; color: var(--ink-dim); padding: 1.2rem; text-align: center; line-height: 1.6; }
+  .map-empty.overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .map-empty.overlay[hidden] { display: none; }
+  .legend { display: flex; flex-wrap: wrap; gap: 0.3rem 0.9rem; align-items: center; font-family: var(--mono); font-size: 0.66rem; color: var(--ink-dim); margin-top: 0.55rem; }
+  .legend i { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 50%; margin-right: 0.3rem; vertical-align: -0.1rem; }
+  .legend b { display: inline-block; width: 1.4rem; margin-right: 0.3rem; vertical-align: 0.2rem; border-top: 2px solid var(--gold); }
+  .legend b.dashed { border-top-style: dashed; opacity: 0.7; }
+  .legend .sub { font-family: var(--sans); font-size: 0.7rem; }
+  .rm-pin {
+    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    background: var(--c); color: #1b160e; font: 700 11px/1 var(--mono); border: 2px solid #1b160e;
+    box-shadow: 0 0 0 1px var(--c), 0 2px 6px rgba(0,0,0,0.6);
+  }
+  .rm-pin.done { opacity: 0.35; }
+  .rm-pin.hl { transform: scale(1.35); box-shadow: 0 0 0 2px #fff, 0 0 12px var(--c); }
+  .leaflet-container { font-family: var(--sans); }
+  .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--panel); color: var(--ink); border: 1px solid var(--panel-edge); }
+  .leaflet-popup-content { font-size: 0.8rem; margin: 0.6rem 0.8rem; }
+  .leaflet-bar a { background: var(--panel); color: var(--ink); border-color: var(--panel-edge); }
+  .leaflet-bar a:hover { background: var(--bg); color: var(--gold); }
+  .step.hl { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+  .map-btn { background: none; border: 1px solid var(--panel-edge); border-radius: 6px; color: var(--ink-dim); cursor: pointer;
+    font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.06em; text-transform: uppercase; padding: 0.2rem 0.5rem; margin-left: 0.4rem; vertical-align: 0.15rem; }
+  .map-btn:hover { color: var(--gold); border-color: var(--gold); }
+  .unmapped { font-size: 0.72rem; color: var(--gold); margin-top: 0.35rem; }
 </style>
 </head>
 <body>
@@ -120,7 +160,9 @@
   <div id="guide"><div class="empty">Loading guide…</div></div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="quests.js"></script>
+<script src="routemap.js"></script>
 <script>
 const slug = (location.pathname.match(/\/quests\/guide\/([A-Za-z0-9]+)\/?$/) || [])[1];
 const PROGRESS_KEY = `wow-quest-guide-progress:${slug}`;
@@ -144,7 +186,7 @@ function stepHtml(step, i) {
   const note = step.note ? `<div class="author-note">${esc(step.note)}</div>` : '';
   const tick = `<div class="tick"><input type="checkbox" id="s${i}" data-q="${step.quest_id}"${done.has(step.quest_id) ? ' checked' : ''}><span class="i">${i + 1}</span></div>`;
   if (!q) {
-    return `<li class="step gone${done.has(step.quest_id) ? ' done' : ''}">${tick}<div>
+    return `<li class="step gone${done.has(step.quest_id) ? ' done' : ''}" id="step-${i}">${tick}<div>
       <h2><label for="s${i}"><span class="qn">Quest #${step.quest_id}</span></label></h2>
       <div class="meta pending">Quest unavailable: this id is no longer in the quest data.</div>${note}</div></li>`;
   }
@@ -163,14 +205,26 @@ function stepHtml(step, i) {
        ${objectivesHtml(q)}
        <h3>Rewards</h3>${rewardsHtml(q.rewards)}
        ${q.details ? `<details class="more-info"><summary>Description</summary><p style="margin-top:0.4rem">${esc(q.details)}</p></details>` : ''}`;
-  return `<li class="step${done.has(step.quest_id) ? ' done' : ''}">${tick}<div>
+  const missing = unmappedParts(step);
+  const mapped = stepStops(step).some(s => s.areas.length);
+  const mapNote = !mapped ? '<div class="unmapped">Not yet mapped: no known locations for this quest.</div>'
+    : missing.length ? `<div class="unmapped">Not on the map: ${missing.map(esc).join(', ')}.</div>` : '';
+  return `<li class="step${done.has(step.quest_id) ? ' done' : ''}" id="step-${i}">${tick}<div>
     <h2><label for="s${i}"><span class="qn">${q.name ? esc(q.name) : `Quest #${q.id}`}</span></label>
-      ${q.status === 'new' ? '<span class="badge">New to Forever</span>' : ''}</h2>
+      ${q.status === 'new' ? '<span class="badge">New to Forever</span>' : ''}
+      ${mapped ? `<button class="map-btn" data-map="${i}" title="Show this step on the route map">Show on map</button>` : ''}</h2>
     <div class="meta">${meta}</div>
+    ${mapNote}
     ${note}
     ${body}
     <a class="wowhead" href="${q.wowhead_url}" target="_blank" rel="noopener">Wowhead →</a>
   </div></li>`;
+}
+
+// Map marker → checklist: outline the step's card (no scrolling; the popup has the name).
+function markStep(i) {
+  document.querySelectorAll('.step.hl').forEach(el => el.classList.remove('hl'));
+  document.getElementById(`step-${i}`)?.classList.add('hl');
 }
 
 function renderProgress() {
@@ -205,6 +259,7 @@ function render() {
       <button class="btn" id="copyBtn">Copy link</button>
       <a class="btn quiet" href="./?from=${encodeURIComponent(data.id)}">Edit a copy</a>
     </div>
+    <section class="route" id="route"><h2>Route map</h2><div id="routeBody"></div></section>
     <ol class="steps">${data.steps.map(stepHtml).join('')}</ol>
     <p class="sub" style="margin-top:1rem">This guide is a fixed snapshot: it won't change under you. Quest details are current game data,
       and XP is the full at-level reward, which drops once you out-level a quest. Your ticks are saved in this browser only.</p>`;
@@ -215,7 +270,20 @@ function render() {
     cb.closest('.step').classList.toggle('done', cb.checked);
     writeProgress();
     renderProgress();
+    setRouteDone(done);
   }));
+  document.querySelectorAll('[data-map]').forEach(b => b.addEventListener('click', () => {
+    const i = Number(b.dataset.map);
+    markStep(i);
+    if (focusStepOnMap(i)) document.getElementById('route').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }));
+  routeMap.done = done;
+  routeMap.highlighted = null;
+  try {
+    renderRouteMap(data, document.getElementById('routeBody'), { onPick: markStep });
+  } catch (e) {
+    document.getElementById('routeBody').innerHTML = `<div class="map-empty">The route map couldn't be drawn (${esc(e.message)}). The checklist below still works.</div>`;
+  }
   document.getElementById('resetBtn').addEventListener('click', () => {
     if (!confirm('Untick every step?')) return;
     done.clear();
