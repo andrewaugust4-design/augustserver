@@ -8,6 +8,7 @@ ingest/normalize.py for how "changed" is derived. This app never talks to wago.t
 """
 
 import json
+import re
 import sqlite3
 from pathlib import Path
 
@@ -427,3 +428,156 @@ def load_set(slug: str) -> dict:
 async def gear_set_page(slug: str) -> FileResponse:
     """Permalink: same page; it reads the slug from its own URL and loads the set."""
     return FileResponse(STATIC_DIR / "gear" / "index.html")
+
+
+# ── Quest Browser (sub-tool #2) ─────────────────────────────────────────────
+# Data: ingest/quests.py. Carryover details come from the vanilla 1.12
+# reference; new Forever quests are known only by id (+ a zone for a few),
+# because quest data is server-side and the client's QuestV2 is id-only.
+
+QUEST_SORTS = {"zone": "zone IS NULL, zone, min_level, name", "level": "min_level IS NULL, min_level, zone, name",
+               "name": "name IS NULL, name, id", "id": "id"}
+PAGE_MAX = 200
+
+
+@app.get("/quests")
+async def quests_redirect() -> RedirectResponse:
+    return RedirectResponse(url="quests/")
+
+
+@app.get("/quests/")
+async def quests_index() -> FileResponse:
+    return FileResponse(STATIC_DIR / "quests" / "index.html")
+
+
+def _quest_conn():
+    try:
+        return db.get_conn()
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from None
+
+
+def _quest_summary(row: sqlite3.Row) -> dict:
+    return {
+        "id": row["id"], "name": row["name"], "zone": row["zone"], "subzone": row["subzone"],
+        "req_level": row["min_level"], "quest_level": row["quest_level"], "faction": row["faction"],
+        "status": row["status"], "revealed": bool(row["revealed"]),
+    }
+
+
+@app.get("/api/quests")
+def quest_list(zone: str | None = None, min_level: int | None = Query(None, ge=0, le=60),
+               max_level: int | None = Query(None, ge=0, le=60), faction: str | None = None,
+               forever: str = "all", q: str | None = None, include_unknown: bool = False,
+               sort: str = "zone", page: int = Query(1, ge=1), per_page: int = Query(100, ge=1, le=PAGE_MAX)) -> dict:
+    """Filtered, paginated quests. faction=alliance|horde lists what that
+    faction can take (its own + shared); faction=both lists shared quests
+    only. Level/zone/faction filters can't place new quests (their details
+    aren't readable), so filtering by them leaves those out. Carryover ids
+    the reference doesn't know are hidden unless include_unknown."""
+    where, params = [], []
+    if forever == "new":
+        where.append("status = 'new'")
+    elif forever != "all":
+        raise HTTPException(status_code=400, detail="forever must be 'new' or 'all'.")
+    if not include_unknown:
+        where.append("(revealed = 1 OR status = 'new')")
+    if zone:
+        where.append("zone = ?"); params.append(zone)
+    if min_level is not None:
+        where.append("min_level >= ?"); params.append(min_level)
+    if max_level is not None:
+        where.append("min_level <= ?"); params.append(max_level)
+    if faction in ("alliance", "horde"):
+        where.append("faction IN (?, 'both')"); params.append(faction)
+    elif faction == "both":
+        where.append("faction = 'both'")
+    elif faction:
+        raise HTTPException(status_code=400, detail="faction must be alliance, horde or both.")
+    if q:
+        where.append("(name LIKE ? OR CAST(id AS TEXT) = ?)"); params += [f"%{q}%", q.strip()]
+    if sort not in QUEST_SORTS:
+        raise HTTPException(status_code=400, detail=f"sort must be one of {sorted(QUEST_SORTS)}.")
+    clause = f"WHERE {' AND '.join(where)}" if where else ""
+    try:
+        with _quest_conn() as conn:
+            total = conn.execute(f"SELECT COUNT(*) FROM quests {clause}", params).fetchone()[0]
+            rows = conn.execute(f"SELECT * FROM quests {clause} ORDER BY {QUEST_SORTS[sort]} LIMIT ? OFFSET ?",
+                                [*params, per_page, (page - 1) * per_page]).fetchall()
+    except sqlite3.OperationalError:
+        raise HTTPException(status_code=503, detail="Quest data missing — re-run the ingest.") from None
+    return {"total": total, "page": page, "per_page": per_page, "rows": [_quest_summary(r) for r in rows]}
+
+
+@app.get("/api/quests/zones")
+def quest_zones() -> list[dict]:
+    try:
+        with _quest_conn() as conn:
+            rows = conn.execute("SELECT zone, COUNT(*) AS n, SUM(status = 'new') AS new FROM quests "
+                                "WHERE zone IS NOT NULL AND (revealed = 1 OR status = 'new') GROUP BY zone ORDER BY zone").fetchall()
+    except sqlite3.OperationalError:
+        raise HTTPException(status_code=503, detail="Quest data missing — re-run the ingest.") from None
+    return [{"zone": r["zone"], "count": r["n"], "new": r["new"]} for r in rows]
+
+
+@app.get("/api/quests/meta")
+def quest_meta() -> dict:
+    with _quest_conn() as conn:
+        m = db.read_meta(conn)
+    return {
+        "forever_build": m.get("forever_build"), "classic_era_build": m.get("classic_era_build"),
+        "refreshed_at": m.get("refreshed_at"),
+        "new_count": int(m.get("quests_new", 0)),
+        "classic_detailed": int(m.get("quests_classic_detailed", 0)),
+        "classic_unrevealed": int(m.get("quests_classic_unrevealed", 0)),
+        "new_with_zone": int(m.get("quests_new_with_zone", 0)),
+    }
+
+
+QUEST_CLASS_BITS = {c["class_id"]: c["name"] for c in CLASSES}
+
+
+def _quest_text(text: str | None) -> str | None:
+    """Vanilla quest text placeholders → readable text ($B line breaks, $N/$C/$R the player)."""
+    if not text:
+        return None
+    text = re.sub(r"\$[gG]\s*([^:;]*):([^;]*);", r"\1/\2", text)
+    for token, word in (("$B", "\n"), ("$b", "\n"), ("$N", "<name>"), ("$n", "<name>"),
+                        ("$C", "<class>"), ("$c", "<class>"), ("$R", "<race>"), ("$r", "<race>")):
+        text = text.replace(token, word)
+    return text
+
+
+@app.get("/api/quest/{quest_id}")
+def quest_detail(quest_id: int) -> dict:
+    with _quest_conn() as conn:
+        row = conn.execute("SELECT * FROM quests WHERE id = ?", (quest_id,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"No quest with id {quest_id}.")
+        detail = json.loads(row["detail_json"]) if row["detail_json"] else {}
+        chain_ids = [detail.get(k) for k in ("prev_quest", "next_quest", "next_in_chain")]
+        linked = {}
+        ids = sorted({abs(i) for i in chain_ids if i})
+        if ids:
+            linked = {r["id"]: r["name"] for r in conn.execute(
+                f"SELECT id, name FROM quests WHERE id IN ({','.join('?' * len(ids))})", ids)}
+
+    def link(qid):
+        return {"id": abs(qid), "name": linked.get(abs(qid))} if qid else None
+
+    classes = detail.get("required_classes") or 0
+    return {
+        **_quest_summary(row),
+        "in_client": bool(row["in_client"]),
+        "source": row["source"],
+        "details": _quest_text(detail.get("details")),
+        "objectives": _quest_text(detail.get("objectives")),
+        "objective_texts": [_quest_text(t) for t in detail.get("objective_texts", [])],
+        "classes": [name for cid, name in QUEST_CLASS_BITS.items() if classes & (1 << (cid - 1))],
+        # PrevQuestId < 0 in the reference means "must be on that quest", not "have completed it".
+        "prev_quest": link(detail.get("prev_quest")), "prev_is_active": (detail.get("prev_quest") or 0) < 0,
+        "next_quest": link(detail.get("next_quest") or detail.get("next_in_chain")),
+        "quest_line": detail.get("quest_line"), "quest_line_step": detail.get("quest_line_step"),
+        "rewards": None,  # server-side in Forever; see README
+        "wowhead_url": f"https://www.wowhead.com/forever/quest={row['id']}",
+    }
