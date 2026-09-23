@@ -22,7 +22,7 @@ from common import icons
 from common.armor import ARMOR_TABLES
 from common.constants import CLASSIC_ERA_PRODUCT, FOREVER_PRODUCT
 
-from . import effects, validate_character, wago_client
+from . import effects, quests, validate_character, wago_client
 from .character_data import CHARACTER_TABLES, load_character_data
 from .normalize import diff_items, load_armor_tables, load_budgets, parse_build, write_db
 from .validate import ValidationError, validate
@@ -77,6 +77,10 @@ def main() -> None:
         wago_client.download_csv(table, era_version, CACHE_DIR, force=args.force)
     for table in effects.FOREVER_TABLES:
         wago_client.download_csv(table, forever_version, CACHE_DIR, force=args.force)
+    for table in quests.FOREVER_TABLES:
+        wago_client.download_csv(table, forever_version, CACHE_DIR, force=args.force)
+    for table in quests.ERA_TABLES:
+        wago_client.download_csv(table, era_version, CACHE_DIR, force=args.force)
 
     budgets = load_budgets(CACHE_DIR / forever_version / "RandPropPoints.csv")
     forever_items = parse_build(
@@ -123,8 +127,14 @@ def main() -> None:
     set_rows, set_stats = effects.build_sets(merged, CACHE_DIR / era_version, CACHE_DIR / forever_version)
     log.info("Item sets: %s", set_stats)
 
+    quest_rows, quest_stats = quests.build_quests(CACHE_DIR / forever_version, CACHE_DIR / era_version)
+    log.info("Quests: %s", quest_stats)
+    for problem in quests.check_anchors(quest_rows):
+        log.error("Quest anchor FAILED: %s", problem)
+    meta.update({f"quests_{k}": str(v) for k, v in quest_stats.items()})
+
     character = load_character_data(CACHE_DIR / forever_version)
-    write_db(DB_PATH, meta, merged, budgets, character, set_rows)
+    write_db(DB_PATH, meta, merged, budgets, character, set_rows, quest_rows)
     log.info("Ingest complete: %s", meta)
 
     # Set-builder sheet cross-checks: logged, never blocking (see validate_character.py).

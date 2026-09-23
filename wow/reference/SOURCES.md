@@ -70,3 +70,19 @@ but is all zeros in this build.
 - **Skyborne** (High Order / Windshaper): race offsets and racials are unknown
   until beta captures exist. The sheet uses the class base with zero offset
   and flags it "provisional".
+
+## Quests (`vanilla_quests.json.gz`)
+
+The vanilla 1.12 `quest_template` from [cmangos/classic-db](https://github.com/cmangos/classic-db),
+4,245 quests, fetched 2026-09-22. Rewards are deliberately left out. It's used
+only for carryover quests, because the Forever/Era clients carry no quest
+details (QuestV2 is id-only).
+
+Compared against [mangoszero/database](https://github.com/mangoszero/database)
+`quest_template` (4,243 shared quests):
+- **Zones:** agree on 99.1%.
+- **Faction:** agrees on 89.8%. Where they differ, cmangos usually restricts
+  a quest to one faction and mangoszero says "any race". cmangos is kept.
+- **Min level:** differs on 755 quests, mostly by 1–5 levels (cmangos lower).
+- **Titles:** differ on 7, punctuation only.
+Treat the levels as approximate.
