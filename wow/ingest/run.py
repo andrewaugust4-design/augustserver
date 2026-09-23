@@ -127,7 +127,8 @@ def main() -> None:
     set_rows, set_stats = effects.build_sets(merged, CACHE_DIR / era_version, CACHE_DIR / forever_version)
     log.info("Item sets: %s", set_stats)
 
-    quest_rows, quest_stats = quests.build_quests(CACHE_DIR / forever_version, CACHE_DIR / era_version)
+    qdb = quests.fetch_questiedb(CACHE_DIR)
+    quest_rows, quest_stats = quests.build_quests(CACHE_DIR / forever_version, CACHE_DIR / era_version, qdb)
     log.info("Quests: %s", quest_stats)
     for problem in quests.check_anchors(quest_rows):
         log.error("Quest anchor FAILED: %s", problem)
