@@ -64,6 +64,26 @@ CLASS_ARMOR_MAX = {
 
 SHIELD_CLASSES = {"warrior", "paladin", "shaman"}
 
+# Armor tiers trained later than level 1: (class, material) -> level. Below
+# it the class tops out one tier lower (Warrior/Paladin mail, Hunter/Shaman
+# leather), per the same Warcraft Tavern class guides this module cites.
+# Weapons have no such lock: every usable weapon type can be trained from
+# level 1, so only an item's required level gates it.
+ARMOR_UNLOCK_LEVEL = {
+    ("warrior", ARMOR_PLATE): 40,
+    ("paladin", ARMOR_PLATE): 40,
+    ("hunter", ARMOR_MAIL): 40,
+    ("shaman", ARMOR_MAIL): 40,
+}
+
+
+def armor_trained_by(class_slug: str, item_class: int, item_subclass: int, level: int) -> bool:
+    """Whether a class has the armor skill for this item by `level`."""
+    if item_class != ITEM_CLASS_ARMOR:
+        return True
+    return level >= ARMOR_UNLOCK_LEVEL.get((class_slug, item_subclass), 1)
+
+
 # Classes that can wield a one-hander in the off hand (vanilla: Warrior and
 # Hunter via the Dual Wield skill, Rogue baseline). Shamans only got dual
 # wield in TBC. Used by the set builder to allow One-Hand items in off hand.

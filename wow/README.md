@@ -97,6 +97,60 @@ Slippers = 35 armor. Both the rate floor and the anchor fail the ingest.
 The tooltip shows armor first ("35 Armor"), then the stat lines.
 `?debug=1` adds `classic_armor`.
 
+## Item effects and set bonuses
+
+Tooltips show **Use: / Equip: / Chance on hit:** lines below the stats, and
+an item's **set**: its members, and the threshold bonuses as "(2) Set: …". Both
+are rendered to text at ingest by `ingest/effects.py` + `common/spelltext.py`,
+which fills `$s1`, `$d`, `$x1`, `${…}.1`, cross-spell `$27648s1` and so on
+from the spell tables.
+
+**Readable vs fallback** (as of the 2026-09-23 ingest):
+- **Carryover items:** links come from Classic Era's `ItemEffect`, which
+  carries `ParentItemID`. Forever's `ItemXItemEffect` is used only as a filter,
+  and it agrees with Era wherever both link. What Forever dropped is only
+  Equip stat auras (+spell damage, crit, hit, mp5…), which are now real Forever
+  item stats and already appear in the stat lines. 1,858 of those Era links
+  are skipped so they don't show twice. 458 carryover effect lines render.
+- **New Forever items:** only Forever links exist. 189 render; 24 link to
+  spells with no readable text, and those show *"effect not yet revealed —
+  encrypted in the beta client until looted"*. They fill in automatically when
+  the data appears. New items with no link at all say their effects may still
+  be encrypted.
+- **Text** comes from Forever's spell tables when readable, because Forever
+  retuned some procs (the Frost Bolt proc now does 40 to 60, not 20 to 30).
+  Otherwise it comes from Era.
+- **Anchor:** Thunderfury renders "Chance on hit: Blasts your enemy with
+  lightning, dealing 300 Nature damage…". The ingest logs an error if it
+  doesn't. (It's 300 in both builds' data, not 35.)
+- **Sets** come from **Forever's** `ItemSet`/`ItemSetSpell`, not Era's: all 418
+  bonus spells are readable, and Forever changed 18 carryover sets. Imperial
+  Plate and Blessed Plate now have five thresholds (2/3/4/5/6). Era text is only
+  a fallback. Set names matching placeholder patterns (PH/TBD/test/zz…) are
+  tagged "placeholder name" (none in the current build).
+- **In the set builder:** equipped pieces count toward their set (by distinct
+  item id), and active thresholds light up in the tooltip and on the sheet.
+  **Flat** bonuses feed the sheet totals (240 of 418: attributes, armor,
+  resistances, AP, health/mana, crit/dodge/parry/block %, defense, block value;
+  hit/spell power/mp5 go under "other"). **Proc/effect** bonuses (178) are
+  display-only and marked "not in totals".
+
+## Level-gating
+
+With a level set, each slot's list shows only what that character can equip
+then:
+- **Required level:** the item's required level ≤ the character's level.
+- **Armor tier:** the class must have trained the armor type by that level
+  (`proficiency.ARMOR_UNLOCK_LEVEL`). Warrior/Paladin plate unlocks at 40 (mail
+  below), and Hunter/Shaman mail unlocks at 40 (leather below). This matters:
+  some Forever items (e.g. Breastplate of Heroism) have required level 0.
+- **Weapons:** gated by required level only, since every usable type trains
+  at 1.
+
+Changing level, class or race re-fetches the list and re-checks the equipped
+items. Items that no longer qualify are flagged on their slot ("Plate is
+trained at level 40.", "Requires level 55."), not removed.
+
 ## Set builder (in the Gear Browser)
 
 Click a paperdoll slot to browse it, then click an item to **equip** it (click
@@ -116,7 +170,8 @@ it again to take it off). Pick race and level (1–60) next to the class. The
     the same rules at click time.
 - **Race/level pickers:** combos come from the client's `CharBaseInfo`,
   including the new ones and both Skyborne races (`ingest/character_data.py`).
-  Item lists flag race- and level-restricted items (`race_ok`/`level_ok`).
+  Item lists hide what the character can't equip yet at its level (see
+  Level-gating) and flag race-restricted items (`race_ok`).
 - **Sheet** (`common/character.py`):
   - Attributes are base + gear (hover for the split), plus health, mana or
     resource, armor and resistances.
@@ -141,8 +196,7 @@ it again to take it off). Pick race and level (1–60) next to the class. The
 
 ### Still deferred (set builder)
 
-- **Set bonuses** aren't in the totals (needs `ItemSet`/`ItemSetSpell`). The
-  totals are raw item-stat sums, and the sheet says so.
+- **Proc-style set bonuses** are shown but not modelled in the totals.
 - **Weapon damage / DPS** on the sheet waits on the weapon-damage follow-up
   below. AP is attribute-based only until then.
 - **Gear ratings** (hit/crit/dodge/parry/block) aren't converted to %, because

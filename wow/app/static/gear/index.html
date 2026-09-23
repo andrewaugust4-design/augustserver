@@ -218,6 +218,18 @@
   .item-row.equipped { border-color: var(--gold); }
   .item-row .info-btn { margin-left: auto; background: none; border: 1px solid var(--panel-edge); color: var(--ink-dim); border-radius: 6px; cursor: pointer; font-family: var(--mono); font-size: 0.66rem; padding: 0.15rem 0.45rem; }
   .item-row .info-btn:hover { color: var(--gold); border-color: var(--gold); }
+  .effect-list { list-style: none; margin: -0.4rem 0 1rem; }
+  .effect-list li { font-size: 0.85rem; padding: 0.15rem 0; color: var(--ok); }
+  .effect-list li.unrevealed { color: var(--ink-dim); font-style: italic; }
+  .set-box { border-top: 1px solid var(--panel-edge); padding-top: 0.7rem; margin-bottom: 0.9rem; font-size: 0.82rem; }
+  .set-name { color: var(--gold); font-weight: 600; margin-bottom: 0.3rem; }
+  .set-members { list-style: none; margin-bottom: 0.5rem; }
+  .set-members li { color: var(--ink-dim); padding: 0.05rem 0 0.05rem 0.8rem; }
+  .set-members li.have { color: var(--ink); }
+  .set-bonus { color: var(--ink-dim); padding: 0.1rem 0; }
+  .set-bonus.active { color: var(--ok); }
+  .set-bonus.unrevealed { font-style: italic; }
+  .sheet .set-bonus { font-size: 0.76rem; }
   .slot-issues { font-size: 0.78rem; color: var(--alert); margin-bottom: 0.6rem; }
 </style>
 </head>
@@ -495,12 +507,12 @@ function renderList() {
   const slot = state.selectedSlot;
   const issues = state.issues[slot] || [];
   if (!state.listItems.length) {
-    results.innerHTML = `<div class="empty-note">No items known for this slot yet.</div>`;
+    results.innerHTML = `<div class="empty-note">No items a level ${state.loadout.level} character can equip in this slot yet.</div>`;
     return;
   }
   results.innerHTML =
     (issues.length ? `<div class="slot-issues">⚠ ${issues.map(i => esc(i.msg)).join(' ')}</div>` : '') +
-    `<div class="hint-note" style="padding-top:0">Click an item to equip it (click again to take it off).</div>` +
+    `<div class="hint-note" style="padding-top:0">Showing what a level ${state.loadout.level} character can equip. Click an item to equip it (click again to take it off).</div>` +
     `<div class="item-list">${state.listItems.map(itemRow).join('')}</div>`;
   results.querySelectorAll('.item-name').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -520,7 +532,6 @@ function itemRow(item) {
   if (item.change_status === 'new') badge = '<span class="badge new">New</span>';
   if (item.change_status === 'changed') badge = `<span class="badge changed" data-id="${item.id}">Changed</span>`;
   const flags = [];
-  if (item.level_ok === false) flags.push(`<span class="flag">req ${item.required_level}</span>`);
   if (item.race_ok === false) flags.push(`<span class="flag">race</span>`);
   if (item.unique) flags.push(`<span class="flag dim">unique</span>`);
   if (item.two_hand) flags.push(`<span class="flag dim">2H</span>`);
@@ -557,6 +568,14 @@ async function showDetail(id) {
 
   const obtain = `How to obtain this item is not yet known — item information is most likely datamined.`;
 
+  const effectsHtml = item.effects.length
+    ? `<ul class="effect-list">${item.effects.map(e =>
+        `<li class="${e.revealed ? '' : 'unrevealed'}">${esc(e.prefix)} ${esc(e.text)}</li>`).join('')}</ul>`
+    : (item.change_status === 'new'
+        ? '<p class="hint-note" style="padding:0 0 0.8rem;">No effects known — new items\' effects can stay encrypted in the beta client until looted.</p>'
+        : '');
+  const setHtml = item.set ? setBlock(item.set) : '';
+
   results.innerHTML = `
     <div class="detail-panel">
       <button class="detail-back" id="detailBack">‹ Back to items</button>
@@ -572,11 +591,31 @@ async function showDetail(id) {
         </div>
       </div>
       ${statsHtml}
+      ${effectsHtml}
+      ${setHtml}
       <div class="obtain-box">${obtain}</div>
       <a class="wowhead-link" href="${item.wowhead_url}" target="_blank" rel="noopener">View on Wowhead →</a>
     </div>
   `;
   document.getElementById('detailBack').addEventListener('click', renderList);
+}
+
+// Set members + threshold bonuses, lit up by what the current loadout wears.
+function setBlock(set) {
+  const worn = new Set(Object.values(state.loadout.slots));
+  const have = set.members.filter(m => worn.has(m.id)).length;
+  const members = set.members.map(m =>
+    `<li class="${worn.has(m.id) ? 'have' : ''}">${esc(m.name)}</li>`).join('');
+  const bonuses = set.bonuses.map(b => {
+    const cls = [have >= b.threshold ? 'active' : '', b.revealed ? '' : 'unrevealed'].join(' ');
+    return `<div class="set-bonus ${cls}">(${b.threshold}) Set: ${esc(b.text)}${b.flat ? '' : ' <span class="flag dim">display only</span>'}</div>`;
+  }).join('');
+  return `
+    <div class="set-box">
+      <div class="set-name">${esc(set.name)} (${have}/${set.members.length})${set.placeholder ? ' <span class="flag dim">placeholder name</span>' : ''}</div>
+      <ul class="set-members">${members}</ul>
+      ${bonuses || '<div class="set-bonus unrevealed">Set bonuses not yet revealed.</div>'}
+    </div>`;
 }
 
 async function showDiff(id) {
@@ -654,7 +693,7 @@ function row(label, value, title = '', gear = false) {
 function renderSheet(s) {
   const c = s.combat;
   const attrs = Object.entries(s.attributes).map(([k, v]) =>
-    row(ATTR_LABELS[k], v.total, `base ${v.base} + gear ${v.gear}`, v.gear > 0)).join('');
+    row(ATTR_LABELS[k], v.total, `base ${v.base} + gear ${v.gear}` + (v.set ? ` + set ${v.set}` : ''), v.gear + v.set > 0)).join('');
   const resists = Object.entries(s.resistances).map(([k, v]) => row(k[0].toUpperCase() + k.slice(1), v)).join('');
   const ratings = Object.entries(s.gear_ratings).map(([k, v]) => row(`+${esc(k)}`, v)).join('');
   const other = Object.entries(s.gear_other).map(([k, v]) => row(`+${esc(k)}`, v)).join('');
@@ -681,9 +720,14 @@ function renderSheet(s) {
     ${row('Block value', c.block_value)}
     ${row('Defense', c.defense)}
     ${ratings || other ? `<h3>Other gear bonuses</h3>${ratings}${other}` : ''}
+    ${s.sets.length ? `<h3>Set bonuses</h3>${s.sets.map(st => `
+      <div class="row"><span style="color:var(--gold)">${esc(st.name)}</span><span class="v">${st.equipped}/${st.total}</span></div>
+      ${st.bonuses.map(b => `<div class="set-bonus${b.active ? ' active' : ''}${b.revealed ? '' : ' unrevealed'}">(${b.threshold}) ${esc(b.text)}${b.active && !b.flat ? ' <span class="flag dim">not in totals</span>' : ''}</div>`).join('')}
+    `).join('')}` : ''}
     <div class="note">
       Gear ratings (hit/crit/dodge…) aren't converted to % — Forever's rating table isn't known yet.
-      Set bonuses not yet included. Weapon damage / DPS pending.
+      Active set bonuses that are flat stats are in the totals; proc/effect bonuses are listed only.
+      Weapon damage / DPS pending.
     </div>
   `;
 }

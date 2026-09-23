@@ -153,10 +153,13 @@ def ranged_ap(class_id: int, level: int, a: float) -> float:
 
 
 def compute_sheet(*, class_slug: str, race: dict, level: int, is_new_combo: bool,
-                  class_level: dict | None, power_name: str, items: list[dict]) -> dict:
+                  class_level: dict | None, power_name: str, items: list[dict],
+                  set_stats: list[dict] = ()) -> dict:
     """`race` is a races-table row; `class_level` a class_level row (None if
     the client has no row for that level); `items` the equipped item rows
-    with parsed `stats`."""
+    with parsed `stats`; `set_stats` the flat stats of *active* set bonuses
+    ({key, value}, see ingest/effects.py). Proc-style set bonuses never
+    reach here — they're display-only."""
     class_id = CLASS_BY_SLUG[class_slug]["class_id"]
     race_id = race["id"]
     base, confidence = base_attributes(race_id, class_id, level)
@@ -203,7 +206,35 @@ def compute_sheet(*, class_slug: str, race: dict, level: int, is_new_combo: bool
             else:
                 other[st["name"]] = other.get(st["name"], 0) + val
 
-    total = {k: base[k] + gear[k] for k in ATTRS}
+    # Active flat set bonuses, into the same buckets as gear.
+    from_set = dict.fromkeys(ATTRS, 0)
+    set_pct = {"melee_crit": 0.0, "spell_crit": 0.0, "dodge": 0.0, "parry": 0.0, "block": 0.0}
+    for bonus in set_stats:
+        key, val = bonus["key"], bonus["value"]
+        if key in from_set:
+            from_set[key] += val
+        elif key == "armor":
+            bonus_armor += val
+        elif key in resist:
+            resist[key] += val
+        elif key == "melee_ap":
+            gear_ap += val
+        elif key == "ranged_ap":
+            gear_rap += val
+        elif key == "health":
+            gear_health += val
+        elif key == "mana":
+            gear_mana += val
+        elif key == "defense":
+            gear_defense += val
+        elif key == "block_value":
+            gear_block_value += val
+        elif key in set_pct:
+            set_pct[key] += val
+        else:
+            other[key] = other.get(key, 0) + val
+
+    total = {k: base[k] + gear[k] + from_set[k] for k in ATTRS}
     s, a, st_, i = total[STR], total[AGI], total[STA], total[INT]
 
     health = (base_health(class_id, level) + health_from_stamina(st_) + gear_health)
@@ -217,8 +248,9 @@ def compute_sheet(*, class_slug: str, race: dict, level: int, is_new_combo: bool
     defense = level * 5 + gear_defense
     def_bonus = gear_defense * 0.04  # vs. a same-level attacker, max skill = level × 5
 
-    melee_crit = BASE_MELEE_CRIT.get(class_id, 0.0) + a * crit_per_agi
-    dodge = BASE_DODGE.get(class_id, 0.0) + a * crit_per_agi * DODGE_AGI_MULT.get(class_id, 1.0) + def_bonus
+    melee_crit = BASE_MELEE_CRIT.get(class_id, 0.0) + a * crit_per_agi + set_pct["melee_crit"]
+    dodge = (BASE_DODGE.get(class_id, 0.0) + a * crit_per_agi * DODGE_AGI_MULT.get(class_id, 1.0)
+             + def_bonus + set_pct["dodge"])
     if race_id == 4:
         dodge += NIGHT_ELF_DODGE
     can_block = class_id in BLOCK_CLASSES and has_shield
@@ -235,7 +267,7 @@ def compute_sheet(*, class_slug: str, race: dict, level: int, is_new_combo: bool
         "confidence": confidence,
         "provisional": provisional_reasons,
         "resource": power_name,
-        "attributes": {k: {"base": base[k], "gear": gear[k], "total": total[k]} for k in ATTRS},
+        "attributes": {k: {"base": base[k], "gear": gear[k], "set": from_set[k], "total": total[k]} for k in ATTRS},
         "health": round(health),
         "mana": round(mana) if mana is not None else None,
         "armor": {"items": armor_items + bonus_armor, "agility": a * 2, "total": armor_items + bonus_armor + a * 2},
@@ -246,10 +278,11 @@ def compute_sheet(*, class_slug: str, race: dict, level: int, is_new_combo: bool
             "ranged_ap": round(max(ranged_ap(class_id, level, a), 0) + gear_ap + gear_rap),
             "melee_crit": round(melee_crit, 2),
             "ranged_crit": round(melee_crit, 2),
-            "spell_crit": round(BASE_SPELL_CRIT[class_id] + i * spell_crit_per_int, 2) if class_id in BASE_SPELL_CRIT else None,
+            "spell_crit": (round(BASE_SPELL_CRIT[class_id] + i * spell_crit_per_int + set_pct["spell_crit"], 2)
+                           if class_id in BASE_SPELL_CRIT else None),
             "dodge": round(dodge, 2),
-            "parry": round(5.0 + def_bonus, 2) if class_id in PARRY_CLASSES else None,
-            "block": round(5.0 + def_bonus, 2) if can_block else None,
+            "parry": round(5.0 + def_bonus + set_pct["parry"], 2) if class_id in PARRY_CLASSES else None,
+            "block": round(5.0 + def_bonus + set_pct["block"], 2) if can_block else None,
             # vmangos GetShieldBlockValue: (block + Str/20 − 1), truncated. The shield's own
             # block value isn't in the Forever item data yet, so only gear "block value" counts.
             "block_value": int(max(gear_block_value + s / 20 - 1, 0)) if can_block else None,

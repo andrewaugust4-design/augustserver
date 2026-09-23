@@ -10,7 +10,7 @@ fixes and an id that vanished from the data shows as "unavailable".
 from __future__ import annotations
 
 from .constants import ARMOR_SHIELD, CLASS_BY_SLUG, ITEM_CLASS_ARMOR
-from .proficiency import DUAL_WIELD_CLASSES, can_equip
+from .proficiency import ARMOR_UNLOCK_LEVEL, DUAL_WIELD_CLASSES, armor_trained_by, can_equip
 
 INVTYPE_ONE_HAND = 13
 INVTYPE_TWO_HAND = 17
@@ -81,6 +81,9 @@ def check(class_slug: str, level: int, playable_bit: int | None,
             flag(slot, "Your race can't use this.")
         if item["required_level"] > level:
             flag(slot, f"Requires level {item['required_level']}.")
+        elif not armor_trained_by(class_slug, item["item_class"], item["item_subclass"], level):
+            unlock = ARMOR_UNLOCK_LEVEL[(class_slug, item["item_subclass"])]
+            flag(slot, f"{item.get('material') or 'This armor'} is trained at level {unlock}.")
         if item["unique_equipped"]:
             if item["id"] in seen_unique:
                 flag(slot, f"Unique — already equipped in {LOADOUT_SLOTS[seen_unique[item['id']]][0]}.", blocks=True)

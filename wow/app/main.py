@@ -19,7 +19,7 @@ from common import icons
 from common.character import compute_sheet
 from common.constants import CLASS_BY_SLUG, CLASSES, SLOT_BY_SLUG, SLOTS
 from common.loadout import INVTYPE_ONE_HAND, INVTYPE_TWO_HAND, LOADOUT_SLOTS, check, is_shield, race_allowed
-from common.proficiency import DUAL_WIELD_CLASSES, can_equip
+from common.proficiency import DUAL_WIELD_CLASSES, armor_trained_by, can_equip
 
 from . import db, sets
 
@@ -137,11 +137,12 @@ async def slots() -> list[dict]:
 @app.get("/api/items")
 async def items(class_: str = Query(..., alias="class"), slot: str = Query(...),
                 race: int | None = None, level: int | None = None) -> list[dict]:
-    """Class-usable items for a paperdoll slot. With `race`/`level`, each row
-    also says whether that character can use it now (the set builder flags,
-    rather than hides, items the race or level rules out). The off-hand list
-    adds One-Hand weapons for dual-wield classes, and the ranged list
-    includes relics (they share the slot in vanilla)."""
+    """Class-usable items for a paperdoll slot. With `level`, only items that
+    character could equip at that level are listed: required level ≤ level,
+    and armor the class has trained by then (plate/mail unlock at 40). With
+    `race`, each row says whether the race can use it (flagged, not hidden).
+    The off-hand list adds One-Hand weapons for dual-wield classes, and the
+    ranged list includes relics (they share the slot in vanilla)."""
     if class_ not in CLASS_BY_SLUG:
         raise HTTPException(status_code=400, detail=f"Unknown class '{class_}'.")
     if slot not in SLOT_BY_SLUG:
@@ -169,11 +170,12 @@ async def items(class_: str = Query(..., alias="class"), slot: str = Query(...),
     for row in rows:
         if not can_equip(class_, row["item_class"], row["item_subclass"], row["allowable_class_mask"]):
             continue
+        if level is not None and (row["required_level"] > level or
+                                  not armor_trained_by(class_, row["item_class"], row["item_subclass"], level)):
+            continue
         summary = _row_to_summary(row)
         if bit is not None:
             summary["race_ok"] = race_allowed(row["allowable_race_mask"], bit)
-        if level is not None:
-            summary["level_ok"] = row["required_level"] <= level
         out.append(summary)
     return out
 
@@ -189,7 +191,16 @@ async def item_detail(item_id: int, debug: bool = False) -> dict:
     if row is None:
         raise HTTPException(status_code=404, detail=f"No item with id {item_id}.")
 
+    keys = row.keys()
+    item_set = None
+    if "item_set" in keys and row["item_set"]:
+        with db.get_conn() as conn:
+            item_set = _set_payload(conn, row["item_set"])
+
     return {
+        # Use:/Equip:/Chance on hit: lines (ingest/effects.py); None before the effects ingest.
+        "effects": json.loads(row["effects_json"]) if "effects_json" in keys and row["effects_json"] else [],
+        "set": item_set,
         "id": row["id"],
         "name": row["name"],
         "quality": row["quality"],
@@ -315,18 +326,23 @@ def sheet(loadout: Loadout) -> dict:
             cl = conn.execute("SELECT * FROM class_level WHERE class_id = ? AND level = ?",
                               (class_id, loadout.level)).fetchone()
             power = conn.execute("SELECT power_name FROM class_power WHERE class_id = ?", (class_id,)).fetchone()
+            equipped = {slot: items_by_id.get(item_id) for slot, item_id in loadout.slots.items()}
+            issues = check(loadout.class_, loadout.level, race["playable_bit"], equipped)
+            counted = [item for slot, item in equipped.items()
+                       if item and not any(issue["blocks"] for issue in issues.get(slot, []))]
+            try:
+                set_progress, set_stats = _active_sets(conn, counted)
+            except sqlite3.OperationalError:  # DB from before item sets; re-run the ingest
+                set_progress, set_stats = [], []
     except FileNotFoundError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from None
 
-    equipped = {slot: items_by_id.get(item_id) for slot, item_id in loadout.slots.items()}
-    issues = check(loadout.class_, loadout.level, race["playable_bit"], equipped)
-    counted = [item for slot, item in equipped.items()
-               if item and not any(issue["blocks"] for issue in issues.get(slot, []))]
     result = compute_sheet(
         class_slug=loadout.class_, race=race, level=loadout.level, is_new_combo=is_new_combo,
         class_level=dict(cl) if cl else None, power_name=power["power_name"] if power else "Mana",
-        items=counted,
+        items=counted, set_stats=set_stats,
     )
+    result["sets"] = set_progress
     return {
         "loadout": loadout.as_dict(),
         "slots": {
@@ -336,6 +352,43 @@ def sheet(loadout: Loadout) -> dict:
         },
         "sheet": result,
     }
+
+
+def _set_payload(conn, set_id: int) -> dict | None:
+    row = conn.execute("SELECT * FROM item_sets WHERE id = ?", (set_id,)).fetchone()
+    if row is None:
+        return None
+    return {
+        "id": row["id"], "name": row["name"], "placeholder": bool(row["is_placeholder"]),
+        "members": json.loads(row["members_json"]),
+        "bonuses": [{k: b[k] for k in ("threshold", "text", "revealed")} | {"flat": bool(b["stats"])}
+                    for b in json.loads(row["bonuses_json"])],
+    }
+
+
+def _active_sets(conn, items: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Set progress for the equipped items, and the flat stats of every
+    active bonus. Pieces are counted by distinct item id."""
+    pieces: dict[int, set[int]] = {}
+    for item in items:
+        if item.get("item_set"):
+            pieces.setdefault(item["item_set"], set()).add(item["id"])
+    progress, flat = [], []
+    for set_id, ids in sorted(pieces.items()):
+        row = conn.execute("SELECT * FROM item_sets WHERE id = ?", (set_id,)).fetchone()
+        if row is None:
+            continue
+        bonuses = []
+        for b in json.loads(row["bonuses_json"]):
+            active = len(ids) >= b["threshold"]
+            if active and b["stats"]:
+                flat += b["stats"]
+            bonuses.append({"threshold": b["threshold"], "text": b["text"], "revealed": b["revealed"],
+                            "active": active, "flat": bool(b["stats"])})
+        progress.append({"id": set_id, "name": row["name"], "placeholder": bool(row["is_placeholder"]),
+                         "equipped": len(ids), "total": len(json.loads(row["members_json"])),
+                         "equipped_ids": sorted(ids), "bonuses": bonuses})
+    return progress, flat
 
 
 def _row_to_summary_dict(item: dict) -> dict:
