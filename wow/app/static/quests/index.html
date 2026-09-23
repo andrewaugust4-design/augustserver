@@ -95,7 +95,9 @@
   .btn:hover { border-color: var(--gold); }
   .empty { font-size: 0.85rem; color: var(--ink-dim); padding: 0.8rem 0; }
 
-  .detail { position: sticky; top: 1rem; background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 12px; padding: 1.1rem 1.2rem; font-size: 0.84rem; line-height: 1.55; }
+  .side { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; display: flex; flex-direction: column; gap: 1rem; }
+  @media (max-width: 820px) { .side { position: static; max-height: none; } }
+  .detail { background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 12px; padding: 1.1rem 1.2rem; font-size: 0.84rem; line-height: 1.55; }
   .detail h2 { font-size: 1.1rem; margin-bottom: 0.25rem; }
   .detail .meta { font-family: var(--mono); font-size: 0.7rem; color: var(--ink-dim); margin-bottom: 0.8rem; }
   .detail h3 { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); font-weight: 500; margin: 0.9rem 0 0.3rem; }
@@ -111,6 +113,48 @@
   .kind { font-family: var(--mono); font-size: 0.62rem; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.06em; }
   .money { font-family: var(--mono); }
   .money .g { color: #e6c24a; } .money .s { color: #c8c8d0; } .money .c { color: #c7844a; }
+  /* guide builder */
+  td.add { width: 2rem; text-align: right; }
+  .add-btn {
+    font-family: var(--mono); font-size: 0.85rem; line-height: 1; width: 1.6rem; height: 1.6rem; border-radius: 6px; cursor: pointer;
+    background: transparent; border: 1px solid var(--panel-edge); color: var(--ink-dim);
+  }
+  .add-btn:hover { border-color: var(--gold); color: var(--gold); }
+  .add-btn.on { border-color: var(--gold-dim); color: var(--gold); background: rgba(224,168,46,0.12); }
+  .guide { background: var(--panel); border: 1px solid var(--gold-dim); border-radius: 12px; padding: 0.9rem 1rem; font-size: 0.82rem; }
+  .guide-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.6rem; }
+  .guide-head h2 { font-size: 0.95rem; }
+  .guide-head h2 .n { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-dim); font-weight: 400; }
+  .linkish { background: none; border: none; font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-dim); cursor: pointer; }
+  .linkish:hover { color: var(--alert); }
+  .guide-fields { display: flex; gap: 0.5rem; margin-bottom: 0.6rem; }
+  .guide-fields input { flex: 1; min-width: 0; }
+  .guide input[type=text], .guide select {
+    font-family: var(--sans); font-size: 0.8rem; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--panel-edge); border-radius: 7px; padding: 0.38rem 0.5rem;
+  }
+  .steps { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+  .step { display: grid; grid-template-columns: auto 1fr auto; gap: 0.2rem 0.5rem; align-items: start;
+    background: var(--bg); border: 1px solid var(--panel-edge); border-radius: 8px; padding: 0.4rem 0.5rem; }
+  .step.dragging { opacity: 0.4; }
+  .step.drop-before { box-shadow: 0 -2px 0 var(--gold); }
+  .step.drop-after { box-shadow: 0 2px 0 var(--gold); }
+  .handle { cursor: grab; color: var(--ink-dim); font-family: var(--mono); font-size: 0.72rem; user-select: none; padding-top: 0.1rem; }
+  .handle .i { color: var(--gold); }
+  .step .nm { cursor: pointer; font-weight: 500; }
+  .step .nm:hover { color: var(--gold); }
+  .step input.note-in { grid-column: 2 / 4; width: 100%; font-size: 0.74rem !important; padding: 0.28rem 0.45rem !important; }
+  .step-ctl { display: flex; gap: 0.15rem; }
+  .step-ctl button { background: none; border: 1px solid transparent; border-radius: 5px; color: var(--ink-dim); cursor: pointer; font-size: 0.72rem; padding: 0.05rem 0.3rem; }
+  .step-ctl button:hover { color: var(--gold); border-color: var(--panel-edge); }
+  .step-ctl button:disabled { visibility: hidden; }
+  .guide-foot { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.7rem; flex-wrap: wrap; }
+  .guide-foot .sub { flex: 1; }
+  .share { margin-top: 0.7rem; padding-top: 0.7rem; border-top: 1px solid var(--panel-edge); }
+  .share-row { display: flex; gap: 0.4rem; margin-top: 0.35rem; }
+  .share-row input { flex: 1; min-width: 0; font-family: var(--mono) !important; font-size: 0.72rem !important; }
+  .msg { font-size: 0.74rem; color: var(--alert); margin-top: 0.4rem; }
+  .msg.ok { color: var(--ok); }
   .wowhead { display: inline-block; margin-top: 0.9rem; font-family: var(--mono); font-size: 0.76rem; color: var(--gold); text-decoration: none; }
   .wowhead:hover { text-decoration: underline; }
 </style>
@@ -151,72 +195,23 @@
           <th class="sortable num" data-sort="objectives" title="Number of objective lines (kill / use / collect). A rough effort guide: 0 means talk-to or delivery.">Obj.</th>
           <th>Faction</th>
           <th></th>
+          <th title="Add to your guide"></th>
         </tr></thead>
         <tbody id="rows"></tbody>
       </table>
       <div class="more" id="more"></div>
     </div>
-    <div class="detail" id="detail"><div class="empty">Select a quest to see its details.</div></div>
+    <div class="side">
+      <div class="guide" id="guide"></div>
+      <div class="detail" id="detail"><div class="empty">Select a quest to see its details.</div></div>
+    </div>
   </div>
 </div>
 
+<script src="quests.js"></script>
 <script>
 const state = { sort: 'zone', page: 1, total: 0, rows: [], selected: null, seq: 0 };
 const PER_PAGE = 100;
-
-function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
-async function api(path) {
-  const res = await fetch('../api/' + path);
-  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
-  return res.json();
-}
-
-const FACTION_LABEL = { alliance: 'Alliance', horde: 'Horde', both: 'Both' };
-const QUALITY_COLORS = {0:'#9d9d9d',1:'#ffffff',2:'#1eff00',3:'#0070dd',4:'#a335ee',5:'#ff8000',6:'#e6cc80',7:'#00ccff'};
-const PLACEHOLDER_ICON = '../icon-placeholder.svg';
-
-// Reward item icons come from the suite's self-hosted icon cache (/api/icon).
-function iconImg(id, quality) {
-  const q = QUALITY_COLORS[quality];
-  return `<img class="icon" src="../api/icon/${id}.jpg" alt="" loading="lazy" style="${q ? '--q:' + q : ''}" ` +
-         `onerror="this.onerror=null;this.src='${PLACEHOLDER_ICON}'">`;
-}
-
-function money(copper) {
-  const g = Math.floor(copper / 10000), s = Math.floor(copper / 100) % 100, c = copper % 100;
-  return `<span class="money">${g ? `${g}<span class="g">g</span> ` : ''}${s ? `${s}<span class="s">s</span> ` : ''}${c || (!g && !s) ? `${c}<span class="c">c</span>` : ''}</span>`;
-}
-
-function who(ends) {
-  if (!ends) return '';
-  const parts = [
-    ...(ends.npcs || []).map(n => esc(n.name) + (n.zone ? ` <span class="sub">(${esc(n.zone)})</span>` : '')),
-    ...(ends.objects || []).map(o => esc(o.name)),
-    ...(ends.items || []).map(i => `<span style="color:${QUALITY_COLORS[i.quality] || '#fff'}">[${esc(i.name)}]</span>`),
-  ];
-  return [...new Set(parts)].join(', ');
-}
-
-function rewardsHtml(r) {
-  if (!r) return '<p class="pending">Rewards not yet revealed — server-side until seen in-world.</p>';
-  const kinds = { choice: 'Choose one', guaranteed: 'You will receive', reward: 'Reward' };
-  const groups = ['guaranteed', 'choice', 'reward'].map(kind => {
-    const items = r.items.filter(i => i.kind === kind);
-    if (!items.length) return '';
-    return `<div class="kind" style="margin-top:0.35rem">${kinds[kind]}</div>` + items.map(i => `
-      <div class="reward">${iconImg(i.id, i.quality)}
-        <span style="color:${QUALITY_COLORS[i.quality] || '#fff'}">${esc(i.name)}</span>${i.count > 1 ? ` <span class="sub">×${i.count}</span>` : ''}</div>`).join('');
-  }).join('');
-  const extras = [
-    r.money ? `Money: ${money(r.money)}` : null,
-    r.xp ? `XP: <span class="money">${r.xp.toLocaleString()}</span>` : null,
-    ...r.reputation.map(x => `${esc(x.faction)}: <span class="money">${x.value > 0 ? '+' : ''}${x.value}</span> reputation`),
-  ].filter(Boolean).map(x => `<div>${x}</div>`).join('');
-  return groups + extras || '<p class="sub">No rewards listed.</p>';
-}
 
 function filters() {
   const p = new URLSearchParams();
@@ -250,13 +245,15 @@ function rowHtml(r) {
     <td class="num">${r.objective_count ?? '<span class="sub">—</span>'}</td>
     <td>${fac}</td>
     <td>${r.status === 'new' ? '<span class="badge">New to Forever</span>' : ''}</td>
+    <td class="add">${addBtn(r.id)}</td>
   </tr>`;
 }
 
 function render() {
   document.getElementById('rows').innerHTML = state.rows.map(rowHtml).join('') ||
-    '<tr><td colspan="7" class="empty">No quests match these filters.</td></tr>';
+    '<tr><td colspan="8" class="empty">No quests match these filters.</td></tr>';
   document.querySelectorAll('tr.q').forEach(tr => tr.addEventListener('click', () => showQuest(Number(tr.dataset.id))));
+  wireAddButtons(document.getElementById('rows'));
   document.getElementById('count').textContent = `${state.total.toLocaleString()} quests · showing ${state.rows.length.toLocaleString()}`;
   const more = document.getElementById('more');
   more.innerHTML = state.rows.length < state.total ? '<button class="btn" id="moreBtn">Load more</button>' : '';
@@ -272,7 +269,7 @@ async function load(page = 1) {
   try {
     data = await api('quests?' + p.toString());
   } catch (e) {
-    document.getElementById('rows').innerHTML = `<tr><td colspan="7" class="empty">Couldn't load quests: ${esc(e.message)}</td></tr>`;
+    document.getElementById('rows').innerHTML = `<tr><td colspan="8" class="empty">Couldn't load quests: ${esc(e.message)}</td></tr>`;
     return;
   }
   if (seq !== state.seq) return;  // a newer filter change won
@@ -321,9 +318,7 @@ async function showQuest(id) {
     body = `
       ${q.started_by ? `<div><span class="sub">Start:</span> ${who(q.started_by)}</div>` : ''}
       ${q.finished_by ? `<div><span class="sub">Turn in:</span> ${who(q.finished_by)}</div>` : ''}
-      ${q.objectives_text.length || q.objectives.length ? `<h3>Objectives</h3>
-        ${q.objectives_text.filter(Boolean).map(t => `<p>${esc(t)}</p>`).join('')}
-        ${q.objectives.length ? `<ul style="margin:0.3rem 0 0 1.1rem">${q.objectives.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}` : ''}
+      ${objectivesHtml(q)}
       <h3>Rewards</h3>${rewardsHtml(q.rewards)}
       ${chainHtml ? `<h3>Chain</h3>${chainHtml}` : ''}
       ${q.quest_line ? `<h3>Quest line</h3><p>${esc(q.quest_line)} — step ${q.quest_line_step}</p>` : ''}
@@ -331,12 +326,204 @@ async function showQuest(id) {
       <div class="note">Classic data from QuestieDB${q.in_client ? '' : ' (this quest isn\'t in the client\'s quest list, e.g. a repeatable)'};
         money and the choose-one split from the 1.12 reference. Forever may have changed it server-side.</div>`;
   }
+  state.detailQuest = q;
   el.innerHTML = `
     <h2>${q.name ? esc(q.name) : `Quest #${q.id}`} ${q.status === 'new' ? '<span class="badge">New to Forever</span>' : ''}</h2>
     <div class="meta">${meta}</div>
+    <div id="detailAdd">${detailAddBtn(q.id)}</div>
     ${body}
     <a class="wowhead" href="${q.wowhead_url}" target="_blank" rel="noopener">Full text on Wowhead →</a>`;
   el.querySelectorAll('.qlink').forEach(a => a.addEventListener('click', () => showQuest(Number(a.dataset.id))));
+  wireAddButtons(el);
+}
+
+// ── Guide builder ──────────────────────────────────────────────────────────
+// The draft lives in localStorage (a per-browser convenience; it's fine if
+// that's unavailable). Saving POSTs it and mints a new immutable link — the
+// draft stays, so editing + saving again makes another link.
+const DRAFT_KEY = 'wow-quest-guide-draft';
+const guide = { title: '', faction: '', steps: [], saved: null, msg: '', msgOk: false };
+
+function storeDraft() {
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ title: guide.title, faction: guide.faction, steps: guide.steps })); } catch (e) {}
+}
+function restoreDraft() {
+  try {
+    const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
+    if (d && Array.isArray(d.steps)) Object.assign(guide, { title: d.title || '', faction: d.faction || '', steps: d.steps });
+  } catch (e) {}
+}
+
+const inGuide = id => guide.steps.some(s => s.quest_id === id);
+function addBtn(id) {
+  const on = inGuide(id);
+  return `<button class="add-btn${on ? ' on' : ''}" data-add="${id}" title="${on ? 'In your guide — click to remove' : 'Add to guide'}">${on ? '✓' : '+'}</button>`;
+}
+function detailAddBtn(id) {
+  return `<button class="btn" data-add="${id}" style="margin-bottom:0.3rem">${inGuide(id) ? '✓ In guide — remove' : '+ Add to guide'}</button>`;
+}
+function wireAddButtons(root) {
+  root.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    toggleStep(Number(b.dataset.add));
+  }));
+}
+
+function stepInfo(id) {
+  const r = state.rows.find(x => x.id === id) || (state.detailQuest?.id === id ? state.detailQuest : null);
+  return r ? { name: r.name, zone: r.zone, req_level: r.req_level } : {};
+}
+
+function toggleStep(id) {
+  if (inGuide(id)) guide.steps = guide.steps.filter(s => s.quest_id !== id);
+  else guide.steps.push({ quest_id: id, note: '', ...stepInfo(id) });
+  guideChanged();
+}
+
+function guideChanged() {
+  guide.msg = '';
+  storeDraft();
+  renderGuide();
+  document.querySelectorAll('#rows [data-add]').forEach(b => { b.outerHTML = addBtn(Number(b.dataset.add)); });
+  wireAddButtons(document.getElementById('rows'));
+  const da = document.getElementById('detailAdd');
+  if (da && state.detailQuest) { da.innerHTML = detailAddBtn(state.detailQuest.id); wireAddButtons(da); }
+}
+
+function renderGuide() {
+  const el = document.getElementById('guide');
+  const n = guide.steps.length;
+  if (!n && !guide.saved) {
+    el.innerHTML = `<div class="guide-head"><h2>Your guide</h2></div>
+      <div class="sub">Add quests with <b>+</b> to build an ordered guide, then save it as a shareable link.</div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div class="guide-head"><h2>Your guide <span class="n">${n} step${n === 1 ? '' : 's'}</span></h2>
+      ${n ? '<button class="linkish" id="gClear">Clear</button>' : ''}</div>
+    <div class="guide-fields">
+      <input type="text" id="gTitle" maxlength="120" placeholder="Guide title (optional)" value="${esc(guide.title)}">
+      <select id="gFaction" title="Faction (optional)">
+        <option value="">Any faction</option>
+        <option value="alliance"${guide.faction === 'alliance' ? ' selected' : ''}>Alliance</option>
+        <option value="horde"${guide.faction === 'horde' ? ' selected' : ''}>Horde</option>
+      </select>
+    </div>
+    <ol class="steps" id="gSteps">${guide.steps.map((s, i) => `
+      <li class="step" draggable="true" data-i="${i}">
+        <span class="handle" title="Drag to reorder">⋮⋮ <span class="i">${i + 1}</span></span>
+        <span><span class="nm" data-show="${s.quest_id}">${s.name ? esc(s.name) : `Quest #${s.quest_id}`}</span>
+          <div class="sub">${[s.zone ? esc(s.zone) : null, s.req_level != null ? `lvl ${s.req_level}` : null].filter(Boolean).join(' · ')}</div></span>
+        <span class="step-ctl">
+          <button data-mv="-1" title="Move up"${i === 0 ? ' disabled' : ''}>▲</button>
+          <button data-mv="1" title="Move down"${i === n - 1 ? ' disabled' : ''}>▼</button>
+          <button data-rm title="Remove">✕</button>
+        </span>
+        <input type="text" class="note-in" maxlength="500" placeholder="Note for this step (optional)" value="${esc(s.note)}">
+      </li>`).join('')}</ol>
+    <div class="guide-foot">
+      <span class="sub">Saved links never change. Saving again makes a new one.</span>
+      <button class="btn" id="gSave"${n ? '' : ' disabled'}>Save guide</button>
+    </div>
+    ${guide.msg ? `<div class="msg${guide.msgOk ? ' ok' : ''}">${esc(guide.msg)}</div>` : ''}
+    ${guide.saved ? `<div class="share"><div class="sub">Shareable link:</div>
+      <div class="share-row"><input type="text" id="gUrl" readonly value="${esc(guide.saved)}">
+        <button class="btn" id="gCopy">Copy</button><a class="btn" href="${esc(guide.saved)}" target="_blank" rel="noopener" style="text-decoration:none">Open</a></div></div>` : ''}`;
+
+  document.getElementById('gTitle').addEventListener('input', e => { guide.title = e.target.value; storeDraft(); });
+  document.getElementById('gFaction').addEventListener('change', e => { guide.faction = e.target.value; storeDraft(); });
+  document.getElementById('gClear')?.addEventListener('click', () => {
+    if (confirm('Clear all steps from your guide?')) { guide.steps = []; guide.title = ''; guide.faction = ''; guide.saved = null; guideChanged(); }
+  });
+  document.getElementById('gSave').addEventListener('click', saveGuide);
+  document.getElementById('gCopy')?.addEventListener('click', () => {
+    const input = document.getElementById('gUrl');
+    input.select();
+    navigator.clipboard?.writeText(input.value).then(() => { guide.msg = 'Link copied.'; guide.msgOk = true; renderGuide(); }, () => {});
+  });
+  el.querySelectorAll('[data-show]').forEach(a => a.addEventListener('click', () => showQuest(Number(a.dataset.show))));
+  el.querySelectorAll('.step').forEach(li => {
+    const i = Number(li.dataset.i);
+    li.querySelector('.note-in').addEventListener('input', e => { guide.steps[i].note = e.target.value; storeDraft(); });
+    li.querySelector('[data-rm]').addEventListener('click', () => { guide.steps.splice(i, 1); guideChanged(); });
+    li.querySelectorAll('[data-mv]').forEach(b => b.addEventListener('click', () => moveStep(i, i + Number(b.dataset.mv))));
+    // Drag-to-reorder (mouse); the ▲/▼ buttons cover touch and keyboard.
+    li.addEventListener('dragstart', e => {
+      if (e.target.closest('input')) { e.preventDefault(); return; }
+      guide.dragFrom = i; li.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(i));
+    });
+    li.addEventListener('dragend', () => { li.classList.remove('dragging'); clearDrop(); });
+    li.addEventListener('dragover', e => {
+      if (guide.dragFrom == null) return;
+      e.preventDefault();
+      const after = e.clientY > li.getBoundingClientRect().top + li.offsetHeight / 2;
+      clearDrop();
+      li.classList.add(after ? 'drop-after' : 'drop-before');
+    });
+    li.addEventListener('drop', e => {
+      e.preventDefault();
+      const after = li.classList.contains('drop-after');
+      const from = guide.dragFrom;
+      guide.dragFrom = null;
+      if (from == null) return;
+      let to = i + (after ? 1 : 0);
+      if (from < to) to -= 1;
+      moveStep(from, to);
+    });
+  });
+}
+
+function clearDrop() {
+  document.querySelectorAll('.step.drop-before, .step.drop-after').forEach(x => x.classList.remove('drop-before', 'drop-after'));
+}
+
+function moveStep(from, to) {
+  if (to < 0 || to >= guide.steps.length || from === to) { renderGuide(); return; }
+  const [s] = guide.steps.splice(from, 1);
+  guide.steps.splice(to, 0, s);
+  guideChanged();
+}
+
+async function saveGuide() {
+  const btn = document.getElementById('gSave');
+  btn.disabled = true;
+  try {
+    const res = await api('guide', {
+      title: guide.title.trim() || null, faction: guide.faction || null,
+      steps: guide.steps.map(s => ({ quest_id: s.quest_id, note: (s.note || '').trim() || null })),
+    });
+    guide.saved = new URL(res.path, new URL('..', location.href)).href;
+    guide.msg = 'Saved. This link is permanent and won\'t change.';
+    guide.msgOk = true;
+  } catch (e) {
+    guide.msg = `Couldn't save: ${e.message}`;
+    guide.msgOk = false;
+  }
+  renderGuide();
+}
+
+// "Edit a copy" from a guide page: /wow/quests/?from=<id> loads it into the builder.
+async function loadGuideFromUrl() {
+  const from = new URLSearchParams(location.search).get('from');
+  if (!from) return;
+  history.replaceState(null, '', location.pathname);
+  try {
+    const g = await api(`guide/${encodeURIComponent(from)}`);
+    if (guide.steps.length && !confirm(`Replace your current draft (${guide.steps.length} steps) with "${g.title || 'this guide'}"?`)) return;
+    guide.title = g.title || '';
+    guide.faction = g.faction || '';
+    guide.steps = g.steps.map(s => ({ quest_id: s.quest_id, note: s.note || '',
+      name: s.quest?.name, zone: s.quest?.zone, req_level: s.quest?.req_level }));
+    guide.saved = null;
+    guideChanged();
+    guide.msg = 'Loaded a copy. Saving makes a new link and the original stays as it was.';
+    guide.msgOk = true;
+    renderGuide();
+  } catch (e) {
+    guide.msg = `Couldn't load that guide: ${e.message}`;
+    renderGuide();
+  }
 }
 
 let debounce;
@@ -348,7 +535,11 @@ function refilter() {
 ['zone', 'faction', 'newOnly', 'unknown'].forEach(id => document.getElementById(id).addEventListener('change', () => load(1)));
 document.querySelectorAll('th.sortable').forEach(th => th.addEventListener('click', () => { state.sort = th.dataset.sort; load(1); }));
 
+restoreDraft();
+renderGuide();
+
 (async function init() {
+  loadGuideFromUrl();
   try {
     const [meta, zones] = await Promise.all([api('quests/meta'), api('quests/zones')]);
     const refreshed = meta.refreshed_at ? new Date(meta.refreshed_at).toUTCString().replace('GMT', 'UTC') : 'unknown';

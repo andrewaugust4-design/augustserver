@@ -563,11 +563,15 @@ def quest_detail(quest_id: int) -> dict:
         row = conn.execute("SELECT * FROM quests WHERE id = ?", (quest_id,)).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail=f"No quest with id {quest_id}.")
-        detail = json.loads(row["detail_json"]) if row["detail_json"] else {}
-        chain = detail.get("chain", {})
-        ids = sorted({abs(q) for v in chain.values() for q in (v if isinstance(v, list) else [v]) if q})
-        names = {r["id"]: r["name"] for r in conn.execute(
-            f"SELECT id, name FROM quests WHERE id IN ({','.join('?' * len(ids))})", ids)} if ids else {}
+        return _quest_payload(conn, row)
+
+
+def _quest_payload(conn, row: sqlite3.Row) -> dict:
+    detail = json.loads(row["detail_json"]) if row["detail_json"] else {}
+    chain = detail.get("chain", {})
+    ids = sorted({abs(q) for v in chain.values() for q in (v if isinstance(v, list) else [v]) if q})
+    names = {r["id"]: r["name"] for r in conn.execute(
+        f"SELECT id, name FROM quests WHERE id IN ({','.join('?' * len(ids))})", ids)} if ids else {}
 
     def links(v) -> list[dict]:
         return [{"id": abs(q), "name": names.get(abs(q))} for q in (v if isinstance(v, list) else [v]) if q]
@@ -596,3 +600,78 @@ def quest_detail(quest_id: int) -> dict:
         "rewards": detail.get("rewards"),
         "wowhead_url": f"https://www.wowhead.com/forever/quest={row['id']}",
     }
+
+
+# ── Quest guides: ordered quest lists saved as immutable share links ────────
+# Stored in sets.db (app/sets.py) next to gear sets, so the ingest's wow.db
+# rebuild never touches them. Only quest ids + notes/title are kept; each
+# step's quest detail is read live on load.
+
+GUIDE_MAX_STEPS = 200
+
+
+class GuideStep(BaseModel):
+    quest_id: int = Field(gt=0, lt=10_000_000)
+    note: str | None = Field(None, max_length=500)
+
+
+class Guide(BaseModel):
+    title: str | None = Field(None, max_length=120)
+    faction: str | None = None
+    steps: list[GuideStep] = Field(min_length=1, max_length=GUIDE_MAX_STEPS)
+
+    @field_validator("faction")
+    @classmethod
+    def _known_faction(cls, v: str | None) -> str | None:
+        if v not in (None, "alliance", "horde"):
+            raise ValueError("faction must be alliance or horde")
+        return v
+
+    @field_validator("steps")
+    @classmethod
+    def _distinct(cls, v: list[GuideStep]) -> list[GuideStep]:
+        if len({s.quest_id for s in v}) != len(v):
+            raise ValueError("a quest can only appear once in a guide")
+        return v
+
+    def as_dict(self) -> dict:
+        clean = lambda t: (t or "").strip() or None  # noqa: E731
+        return {"title": clean(self.title), "faction": self.faction,
+                "steps": [{"quest_id": s.quest_id, "note": clean(s.note)} for s in self.steps]}
+
+
+@app.post("/api/guide")
+def save_guide(guide: Guide, request: Request) -> dict:
+    """Save a quest guide as a new, permanent, immutable share link."""
+    ids = [s.quest_id for s in guide.steps]
+    with _quest_conn() as conn:
+        known = {r[0] for r in conn.execute(f"SELECT id FROM quests WHERE id IN ({','.join('?' * len(ids))})", ids)}
+    if missing := [i for i in ids if i not in known]:
+        raise HTTPException(status_code=400, detail=f"Unknown quest ids: {missing[:10]}")
+    try:
+        slug = sets.save_guide(guide.as_dict(), _client_ip(request))
+    except sets.RateLimited:
+        raise HTTPException(status_code=429, detail=f"Too many saves — limit is {sets.SAVES_PER_HOUR} per hour.") from None
+    return {"id": slug, "path": f"quests/guide/{slug}"}
+
+
+@app.get("/api/guide/{slug}")
+def load_guide(slug: str) -> dict:
+    """The saved guide with each step's current quest detail (None = no longer in the data)."""
+    found = sets.load_guide(slug) if slug.isalnum() and len(slug) <= 16 else None
+    if found is None:
+        raise HTTPException(status_code=404, detail="No saved guide with that link.")
+    guide, created_at = found
+    with _quest_conn() as conn:
+        steps = []
+        for step in guide["steps"]:
+            row = conn.execute("SELECT * FROM quests WHERE id = ?", (step["quest_id"],)).fetchone()
+            steps.append({**step, "quest": _quest_payload(conn, row) if row else None})
+    return {"id": slug, "title": guide.get("title"), "faction": guide.get("faction"),
+            "created_at": created_at, "steps": steps}
+
+
+@app.get("/quests/quests.js")
+async def quests_js() -> FileResponse:
+    """Rendering helpers shared by the Quest Browser and the guide page."""
+    return FileResponse(STATIC_DIR / "quests" / "quests.js", media_type="text/javascript")
