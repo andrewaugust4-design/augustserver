@@ -297,6 +297,51 @@ When that happens, re-run the probe and set `BLIZZARD_ITEM_MEDIA_NAMESPACE`.
 Retail's one extra new-item hit was a genuine match (same name), so a
 name-checked retail fallback is a possible later improvement.
 
+## Quest Browser (sub-tool #2, `/wow/quests/`)
+
+A filterable, sortable quest table: zone, required-level range, faction
+(Alliance or Horde *including* shared quests, or shared only), a "New to
+Forever only" toggle, and search by name or id. It pages 100 rows at a time.
+Clicking a row opens the details, with chain links and a Wowhead link-out.
+The API is `/api/quests`, `/api/quests/zones`, `/api/quests/meta` and
+`/api/quest/<id>`, with data built by `ingest/quests.py`.
+
+**What's datamined vs reference vs link-out.** Checked 2026-09-23. It
+differs from what you'd expect:
+- **Quest existence and the "New to Forever" badge come from the client.**
+  The client's quest table, `QuestV2`, is **only ID + UniqueBitFlag**, in both
+  builds. Forever ids absent from Era give **1,795**, matching the trackers.
+  Three of those are vanilla quests only just added to the client list, so
+  **1,792** get the badge.
+- **Names, zones, levels, faction and text aren't in either client.** Classic
+  keeps quest data server-side. For carryover quests they come from the
+  vanilla 1.12 reference `reference/vanilla_quests.json.gz` (cmangos
+  classic-db `quest_template`, 4,245 quests), labelled as reference data in the
+  UI because Forever may have changed a quest server-side. Faction comes from
+  RequiredRaces (Alliance = Human/Dwarf/Night Elf/Gnome bits). Subzones roll up
+  to their parent zone. Negative ZoneOrSort values are categories (class
+  quests, professions, events).
+- **New Forever quests** can't be named from any readable source. The client
+  gives a zone for 22 of them (QuestPOIBlob → UiMap) and quest-line names for
+  a few. The rest show "Quest #id — not yet revealed" with a Wowhead link.
+  They're excluded by zone, level and faction filters, since those can't be
+  known. So the spec's Dun Morogh examples can't be checked by name: none of
+  the 22 located quests is in Dun Morogh.
+- **Wowhead is link-out only.** Its robots.txt disallows AI agents and
+  scrapers, so nothing is fetched from it.
+- **Rewards are never shown.** They're server-side and retunable in Forever,
+  so the UI says "pending".
+- **Unidentified carryover ids.** 1,273 carryover ids from Era's client aren't
+  in the 1.12 reference (internal, deprecated or later-Era quests). They're
+  hidden unless "Include unidentified carryover ids" is ticked. 710 reference
+  quests aren't in the client's list at all (e.g. repeatables with no
+  completion flag). They're kept, with a note.
+- **No "changed" status.** There are no Forever-side quest fields to diff
+  against.
+- **Anchors checked every ingest:** Kobold Camp Cleanup (Elwynn, Alliance,
+  req 1), Your Place In The World (Durotar, Horde), Sharptalon's Claw
+  (Ashenvale, Horde, req 20), A Threat Within. A mismatch logs an error.
+
 ## Refreshing the data
 
 ```
