@@ -8,6 +8,7 @@ ingest/normalize.py for how "changed" is derived. This app never talks to wago.t
 """
 
 import json
+import os
 import re
 import sqlite3
 from pathlib import Path
@@ -28,6 +29,8 @@ app = FastAPI(title="WoW: Forever", docs_url=None, redoc_url=None)
 
 STATIC_DIR = Path(__file__).parent / "static"
 PLACEHOLDER_ICON = STATIC_DIR / "icon-placeholder.svg"
+# Zone map art from `python -m ingest.maps` (one-time; the daily ingest doesn't touch it).
+MAPS_DIR = Path(os.getenv("WOW_MAPS_DIR", Path(__file__).resolve().parent.parent / "data" / "maps"))
 
 
 def _public_stats(stats: list[dict], debug: bool) -> list[dict]:
@@ -681,3 +684,33 @@ async def quest_guide_page(slug: str) -> FileResponse:
 async def quests_js() -> FileResponse:
     """Rendering helpers shared by the Quest Browser and the guide page."""
     return FileResponse(STATIC_DIR / "quests" / "quests.js", media_type="text/javascript")
+
+
+# ── Zone maps (guide route map) ─────────────────────────────────────────────
+
+_maps_cache: dict = {"mtime": None, "maps": {}}
+
+
+def _map_index() -> dict[int, dict]:
+    """data/maps/index.json → {UiMap id: {name, width, height}}; {} before the
+    maps extract has run (the guide page then shows its no-map placeholder)."""
+    path = MAPS_DIR / "index.json"
+    try:
+        mtime = path.stat().st_mtime
+    except FileNotFoundError:
+        return {}
+    if _maps_cache["mtime"] != mtime:
+        doc = json.loads(path.read_text())
+        _maps_cache.update(mtime=mtime, maps={int(k): v for k, v in doc["maps"].items()})
+    return _maps_cache["maps"]
+
+
+@app.get("/maps/{name}")
+def zone_map_image(name: str) -> FileResponse:
+    """Zone map PNG (/maps/<UiMap id>.png). nginx can serve these directly
+    instead — see deploy/nginx-wow.conf."""
+    ui_map = name.removesuffix(".png")
+    if not ui_map.isdigit() or int(ui_map) not in _map_index():
+        raise HTTPException(status_code=404, detail="No map for that zone.")
+    return FileResponse(MAPS_DIR / f"{ui_map}.png", media_type="image/png",
+                        headers={"Cache-Control": "public, max-age=2592000"})
