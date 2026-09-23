@@ -302,45 +302,52 @@ name-checked retail fallback is a possible later improvement.
 A filterable, sortable quest table: zone, required-level range, faction
 (Alliance or Horde *including* shared quests, or shared only), a "New to
 Forever only" toggle, and search by name or id. It pages 100 rows at a time.
-Clicking a row opens the details, with chain links and a Wowhead link-out.
+Clicking a row opens the details: objectives, quest giver and turn-in,
+rewards with item icons, chain links, and a Wowhead link-out.
 The API is `/api/quests`, `/api/quests/zones`, `/api/quests/meta` and
 `/api/quest/<id>`, with data built by `ingest/quests.py`.
 
-**What's datamined vs reference vs link-out.** Checked 2026-09-23. It
-differs from what you'd expect:
-- **Quest existence and the "New to Forever" badge come from the client.**
-  The client's quest table, `QuestV2`, is **only ID + UniqueBitFlag**, in both
-  builds. Forever ids absent from Era give **1,795**, matching the trackers.
-  Three of those are vanilla quests only just added to the client list, so
-  **1,792** get the badge.
-- **Names, zones, levels, faction and text aren't in either client.** Classic
-  keeps quest data server-side. For carryover quests they come from the
-  vanilla 1.12 reference `reference/vanilla_quests.json.gz` (cmangos
-  classic-db `quest_template`, 4,245 quests), labelled as reference data in the
-  UI because Forever may have changed a quest server-side. Faction comes from
-  RequiredRaces (Alliance = Human/Dwarf/Night Elf/Gnome bits). Subzones roll up
-  to their parent zone. Negative ZoneOrSort values are categories (class
-  quests, professions, events).
-- **New Forever quests** can't be named from any readable source. The client
-  gives a zone for 22 of them (QuestPOIBlob → UiMap) and quest-line names for
-  a few. The rest show "Quest #id — not yet revealed" with a Wowhead link.
-  They're excluded by zone, level and faction filters, since those can't be
-  known. So the spec's Dun Morogh examples can't be checked by name: none of
-  the 22 located quests is in Dun Morogh.
-- **Wowhead is link-out only.** Its robots.txt disallows AI agents and
-  scrapers, so nothing is fetched from it.
-- **Rewards are never shown.** They're server-side and retunable in Forever,
-  so the UI says "pending".
-- **Unidentified carryover ids.** 1,273 carryover ids from Era's client aren't
-  in the 1.12 reference (internal, deprecated or later-Era quests). They're
-  hidden unless "Include unidentified carryover ids" is ticked. 710 reference
-  quests aren't in the client's list at all (e.g. repeatables with no
-  completion flag). They're kept, with a note.
-- **No "changed" status.** There are no Forever-side quest fields to diff
-  against.
+**Sourcing.** Checked 2026-09-23:
+- **Classic quest detail and rewards come from [QuestieDB](https://github.com/Questie/QuestieDB).**
+  It's open community data, *downloaded* from GitHub (plain file downloads,
+  not scraping) by `ingest/questiedb.py` at each refresh. It's pinned to
+  master's current commit, cached in `data/raw/questiedb/<sha>/`, and parsed
+  from its Lua source files without executing anything (`ingest/luadata.py`).
+  It supplies name, zone, required and quest level, races → faction, classes,
+  objectives, quest giver and turn-in (NPC, object or item), chain links, and
+  rewards: reward items (from QuestieDB's item → `questRewards` links), XP and
+  reputation. The version and commit show in the banner (`/api/quests/meta`).
+  The repo has no LICENSE file, so its terms are the Questie project's.
+- **QuestieDB has no money reward and doesn't mark choose-one vs guaranteed
+  items.** Those two, plus the long description, come from the cmangos 1.12
+  `quest_template` in `reference/vanilla_quests.json.gz`. Its reward item sets
+  match QuestieDB's on 1,792 of 1,793 quests.
+- **The Forever side comes from wago.tools client tables.** The client's quest
+  table `QuestV2` is only ID + UniqueBitFlag in both builds; quest details are
+  server-side. Forever ids absent from Era's `QuestV2` and from QuestieDB give
+  **1,792** "New to Forever" quests. The trackers' 1,795 includes 3 vanilla
+  quests that were only newly listed. QuestieDB's own "Forever" flavor is
+  Classic data re-projected to Forever's map coordinates, with no new quests,
+  so it can't supply these. For 22 new quests the client gives a zone
+  (QuestPOIBlob → UiMap), and for a few a quest-line name. Everything else,
+  **rewards included, shows "not yet revealed — server-side until seen
+  in-world"**. It fills in once QuestieDB or the client catch up, since both
+  are re-read every refresh.
+- **Wowhead is a human link-out only, never fetched by the tool.** Its
+  robots.txt disallows automated agents anyway.
+- **Reward item icons** use the suite's `/api/icon/<id>` cache, and names and
+  quality come from the Forever client's ItemSparse.
+- **Unidentified carryover ids.** 1,273 carryover ids from Era's client
+  aren't in QuestieDB. They're hidden unless "Include unidentified carryover
+  ids" is ticked. QuestieDB quests missing from the client list (709, e.g.
+  repeatables) are kept, with a note.
+- **Dun Morogh examples.** A Visitor to Dun Morogh, Frosthowl and Secure the
+  Mountain can't be matched to their ids, since no readable source names new
+  quests. None of the 22 new quests with a zone is in Dun Morogh.
 - **Anchors checked every ingest:** Kobold Camp Cleanup (Elwynn, Alliance,
-  req 1), Your Place In The World (Durotar, Horde), Sharptalon's Claw
-  (Ashenvale, Horde, req 20), A Threat Within. A mismatch logs an error.
+  req 1, 170 XP), Your Place In The World (Durotar, Horde), Sharptalon's Claw
+  (Ashenvale, Horde, req 20, 2,450 XP), Wanted: "Hogger" (Stormwind Guard
+  Leggings among its choice rewards), A Threat Within.
 
 ## Refreshing the data
 
