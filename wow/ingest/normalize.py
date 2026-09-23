@@ -161,6 +161,7 @@ def parse_build(item_csv: Path, itemsparse_csv: Path, *, budgets: dict[int, dict
             "allowable_class_mask": allowable_class_mask,
             "allowable_race_mask": _race_mask(row),
             "unique_equipped": unique,
+            "item_set": int(row.get("ItemSet") or 0),
             "item_level": item_level,
             "stats": stats,
             "armor": armor,
@@ -225,11 +226,23 @@ CREATE TABLE items (
     classic_item_level INTEGER,
     diff_json TEXT,
     armor INTEGER,
-    classic_armor INTEGER
+    classic_armor INTEGER,
+    effects_json TEXT,
+    item_set INTEGER
 );
 
 CREATE INDEX idx_items_slot ON items(slot);
 CREATE INDEX idx_items_change_status ON items(change_status);
+
+-- Item sets, from the Forever build (see ingest/effects.py).
+DROP TABLE IF EXISTS item_sets;
+CREATE TABLE item_sets (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    is_placeholder INTEGER NOT NULL,
+    members_json TEXT NOT NULL,
+    bonuses_json TEXT NOT NULL
+);
 
 -- Forever build's RandPropPoints (stat budget per item level), kept for
 -- reference/debugging (item stat values are already computed at ingest).
@@ -244,7 +257,7 @@ BUDGET_COLUMNS = [f"{family}_{i}" for family in ("Epic", "Superior", "Good") for
 
 
 def write_db(db_path: Path, meta: dict[str, str], items: dict[int, dict], budgets: dict[int, dict],
-             character: dict[str, list[tuple]] | None = None) -> None:
+             character: dict[str, list[tuple]] | None = None, item_sets: list[tuple] | None = None) -> None:
     """Rebuild the DB contents in a single transaction, so the running app
     never sees a half-written items table."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -262,8 +275,8 @@ def write_db(db_path: Path, meta: dict[str, str], items: dict[int, dict], budget
                 allowable_race_mask, unique_equipped,
                 item_level, change_status, stats_json,
                 classic_stats_json, classic_item_level, diff_json,
-                armor, classic_armor
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                armor, classic_armor, effects_json, item_set
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -276,6 +289,8 @@ def write_db(db_path: Path, meta: dict[str, str], items: dict[int, dict], budget
                     it.get("classic_item_level"),
                     json.dumps(it["diff"]) if it.get("diff") else None,
                     it["armor"], it.get("classic_armor"),
+                    json.dumps(it["effects"]) if it.get("effects") else None,
+                    it["item_set"] or None,
                 )
                 for it in items.values()
             ],
@@ -289,6 +304,8 @@ def write_db(db_path: Path, meta: dict[str, str], items: dict[int, dict], budget
         )
         if character is not None:
             character_data.write_tables(conn, character)
+        if item_sets:
+            conn.executemany("INSERT INTO item_sets VALUES (?, ?, ?, ?, ?)", item_sets)
         conn.executemany(
             "INSERT INTO meta (key, value) VALUES (?, ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",

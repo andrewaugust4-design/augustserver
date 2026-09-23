@@ -22,7 +22,7 @@ from common import icons
 from common.armor import ARMOR_TABLES
 from common.constants import CLASSIC_ERA_PRODUCT, FOREVER_PRODUCT
 
-from . import validate_character, wago_client
+from . import effects, validate_character, wago_client
 from .character_data import CHARACTER_TABLES, load_character_data
 from .normalize import diff_items, load_armor_tables, load_budgets, parse_build, write_db
 from .validate import ValidationError, validate
@@ -34,6 +34,7 @@ CACHE_DIR = DATA_DIR / "raw"
 DB_PATH = DATA_DIR / "wow.db"
 
 TABLES = ("Item", "ItemSparse")
+THUNDERFURY = 19019  # effect anchor: its Chance on hit line must render from the spell tables
 FOREVER_ONLY_TABLES = ("RandPropPoints", *ARMOR_TABLES, *CHARACTER_TABLES)
 
 
@@ -72,6 +73,10 @@ def main() -> None:
             wago_client.download_csv(table, version, CACHE_DIR, force=args.force)
     for table in FOREVER_ONLY_TABLES:
         wago_client.download_csv(table, forever_version, CACHE_DIR, force=args.force)
+    for table in effects.ERA_TABLES:
+        wago_client.download_csv(table, era_version, CACHE_DIR, force=args.force)
+    for table in effects.FOREVER_TABLES:
+        wago_client.download_csv(table, forever_version, CACHE_DIR, force=args.force)
 
     budgets = load_budgets(CACHE_DIR / forever_version / "RandPropPoints.csv")
     forever_items = parse_build(
@@ -106,8 +111,20 @@ def main() -> None:
         "unchanged_count": str(counts.get("unchanged", 0)),
         **validation_meta,
     }
+    item_effects, effect_stats = effects.build_item_effects(merged, CACHE_DIR / era_version, CACHE_DIR / forever_version)
+    for item_id, found in item_effects.items():
+        merged[item_id]["effects"] = found
+    log.info("Item effects: %s", effect_stats)
+    anchor = " ".join(e["text"] for e in item_effects.get(THUNDERFURY, []))
+    if "300 Nature damage" in anchor:
+        log.info("Effect anchor: Thunderfury renders %r", anchor[:90] + "…")
+    else:
+        log.error("Effect anchor FAILED: Thunderfury's proc text is %r — check ingest/effects.py", anchor)
+    set_rows, set_stats = effects.build_sets(merged, CACHE_DIR / era_version, CACHE_DIR / forever_version)
+    log.info("Item sets: %s", set_stats)
+
     character = load_character_data(CACHE_DIR / forever_version)
-    write_db(DB_PATH, meta, merged, budgets, character)
+    write_db(DB_PATH, meta, merged, budgets, character, set_rows)
     log.info("Ingest complete: %s", meta)
 
     # Set-builder sheet cross-checks: logged, never blocking (see validate_character.py).
