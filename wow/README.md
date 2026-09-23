@@ -360,6 +360,43 @@ The API is `/api/quests`, `/api/quests/zones`, `/api/quests/meta` and
   (Ashenvale, Horde, req 20, 2,450 XP), Wanted: "Hogger" (Stormwind Guard
   Leggings among its choice rewards), A Threat Within.
 
+### Quest guides (build, save, share)
+
+Every row has a **+** button, and the details panel has an "Add to guide"
+button. Both add the quest to the **guide tray** above the details panel. In
+the tray you get an ordered list: drag the ⋮⋮ handle to reorder (▲/▼ also
+work on touch and keyboard), add an optional note to each step, and set an
+optional title and faction. The draft is kept in this browser's localStorage
+until you save. **Save guide** calls `POST /api/guide` with
+`{title?, faction?, steps: [{quest_id, note?}]}` and shows the permalink.
+
+- **Guides are immutable, shareable snapshots stored in `data/sets.db`**
+  (the `guides` table, next to the gear `sets`). They're not in `wow.db`, so an
+  item or quest ingest refresh never touches them. Every save mints a new
+  8-character id and rows are never updated. On a guide page, "Edit a copy"
+  opens the Quest Browser at `quests/?from=<id>`, and saving that makes a
+  *new* link while the original stays as it was.
+- **Only quest ids, notes, title and faction are stored.** Zone, level,
+  faction, XP, objectives and rewards are read live from `wow.db` on every
+  load (`GET /api/guide/<id>`), so old guides get better as the data does.
+  An id that's no longer in the data shows as "Quest unavailable" and the rest
+  of the guide still works.
+- **Saving is open (no password), permanent, and rate-limited per IP.** The
+  limit is the same `WOW_SET_SAVES_PER_HOUR` budget as gear sets, shared
+  between the two. Limits: 1–200 steps, each quest at most once, notes up to 500
+  characters, title up to 120, and every quest id must exist in the data.
+- **The guide page** is at `quests/guide/<id>` (`app/static/quests/guide.html`).
+  It sets `<base href>` to `…/quests/` like the gear set permalink, so
+  relative paths still work. It's an ordered checklist: zone, level, faction,
+  XP, objectives, start/turn-in and rewards per step, plus the author's note
+  and a total XP. **Check-off progress is per viewer**, saved in localStorage
+  under `wow-quest-guide-progress:<id>`, with a "Reset progress" button. If
+  storage is blocked, ticking still works for that visit but isn't kept.
+- **XP shown is the base at-level reward** (see above), so a guide's XP total
+  is an upper bound for a character who's ahead of the quests.
+- `app/static/quests/quests.js` holds the rendering helpers (rewards,
+  objectives, icons, `api()`) that the browser and the guide page share.
+
 ## Refreshing the data
 
 ```

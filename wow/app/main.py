@@ -671,6 +671,12 @@ def load_guide(slug: str) -> dict:
             "created_at": created_at, "steps": steps}
 
 
+@app.get("/quests/guide/{slug}")
+async def quest_guide_page(slug: str) -> FileResponse:
+    """Permalink page; it reads the slug from its own URL."""
+    return FileResponse(STATIC_DIR / "quests" / "guide.html")
+
+
 @app.get("/quests/quests.js")
 async def quests_js() -> FileResponse:
     """Rendering helpers shared by the Quest Browser and the guide page."""

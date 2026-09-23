@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Served at /wow/quests/guide/<id>: resolve relative URLs against /wow/quests/ like the browser page. -->
+<script>document.write('<base href="' + location.pathname.replace(/quests\/.*$/, '') + 'quests/">');</script>
+<title>Quest Guide — WoW: Forever</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #1b160e;
+    --panel: #251e12;
+    --panel-edge: #3d331d;
+    --ink: #f0e6d2;
+    --ink-dim: #a89878;
+    --gold: #e0a82e;
+    --gold-dim: #8a6b1f;
+    --alert: #e2604c;
+    --ok: #8fc79a;
+    --new: #34d399;
+    --alliance: #6aa5ff;
+    --horde: #ff6b5b;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+    --sans: "Space Grotesk", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--sans); min-height: 100vh; padding: 2rem 1.25rem 4rem; }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+
+  .back-link {
+    display: inline-flex; align-items: center; gap: 0.45rem;
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink-dim); text-decoration: none;
+    border: 1px solid var(--panel-edge); border-radius: 6px;
+    padding: 0.45rem 0.85rem; margin-bottom: 1.25rem; transition: color 0.15s, border-color 0.15s;
+  }
+  .back-link:hover { color: var(--gold); border-color: var(--gold); }
+  h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 700; letter-spacing: -0.01em; margin-bottom: 0.9rem; }
+  h1 .accent { color: var(--gold); }
+
+  .banner {
+    background: rgba(224, 168, 46, 0.08); border: 1px solid rgba(224, 168, 46, 0.35); border-radius: 10px;
+    padding: 0.75rem 1rem; margin-bottom: 1.5rem; font-size: 0.78rem; line-height: 1.55;
+  }
+  .banner strong { color: var(--gold); }
+  .banner .meta-line { display: block; margin-top: 0.3rem; font-family: var(--mono); font-size: 0.68rem; color: var(--ink-dim); }
+
+  .fac { font-family: var(--mono); font-size: 0.7rem; }
+  .fac.alliance { color: var(--alliance); }
+  .fac.horde { color: var(--horde); }
+  .fac.both { color: var(--ink-dim); }
+  .badge {
+    font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap;
+    padding: 0.12rem 0.45rem; border-radius: 999px; color: var(--new); border: 1px solid var(--new); background: rgba(52,211,153,0.1);
+  }
+  .btn {
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 0.55rem 0.9rem; border-radius: 8px; cursor: pointer;
+    background: rgba(224,168,46,0.12); border: 1px solid var(--gold-dim); color: var(--gold);
+  }
+  .btn:hover { border-color: var(--gold); }
+  .wrap { max-width: 860px; }
+  .back-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .sub { font-size: 0.72rem; color: var(--ink-dim); }
+  .empty { font-size: 0.85rem; color: var(--ink-dim); padding: 0.8rem 0; }
+  .summary { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; font-family: var(--mono); font-size: 0.74rem; color: var(--ink-dim); margin-bottom: 0.9rem; }
+  .summary b { color: var(--ink); font-weight: 500; }
+  .progress { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
+  .bar { flex: 1; min-width: 160px; height: 8px; border-radius: 999px; background: var(--panel); border: 1px solid var(--panel-edge); overflow: hidden; }
+  .bar > div { height: 100%; background: var(--gold); transition: width 0.2s; }
+  .progress .count { font-family: var(--mono); font-size: 0.74rem; color: var(--ink-dim); white-space: nowrap; }
+  .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.4rem; }
+  a.btn { text-decoration: none; display: inline-block; }
+  .btn.quiet { background: transparent; border-color: var(--panel-edge); color: var(--ink-dim); }
+  .btn.quiet:hover { color: var(--gold); border-color: var(--gold); }
+
+  ol.steps { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 0.7rem; }
+  .step { display: grid; grid-template-columns: auto 1fr; gap: 0 0.8rem; background: var(--panel); border: 1px solid var(--panel-edge);
+    border-radius: 12px; padding: 0.9rem 1rem; font-size: 0.84rem; line-height: 1.55; }
+  .step.done { opacity: 0.55; }
+  .step.done h2 .qn { text-decoration: line-through; text-decoration-color: var(--gold-dim); }
+  .tick { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding-top: 0.15rem; }
+  .tick input { width: 1.15rem; height: 1.15rem; accent-color: var(--gold); cursor: pointer; }
+  .tick .i { font-family: var(--mono); font-size: 0.7rem; color: var(--gold); }
+  .step h2 { font-size: 1.02rem; margin-bottom: 0.15rem; }
+  .step h2 label { cursor: pointer; }
+  .step .meta { font-family: var(--mono); font-size: 0.7rem; color: var(--ink-dim); }
+  .step h3 { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); font-weight: 500; margin: 0.7rem 0 0.25rem; }
+  .step p { white-space: pre-line; }
+  .author-note { margin-top: 0.6rem; padding: 0.5rem 0.7rem; border-left: 3px solid var(--gold); background: rgba(224,168,46,0.07); border-radius: 0 8px 8px 0; white-space: pre-line; }
+  .step .pending { color: var(--gold); }
+  .step.gone { border-style: dashed; }
+  details.more-info { margin-top: 0.5rem; }
+  details.more-info summary { cursor: pointer; font-family: var(--mono); font-size: 0.68rem; color: var(--ink-dim); letter-spacing: 0.06em; text-transform: uppercase; }
+  details.more-info summary:hover { color: var(--gold); }
+  .wowhead { display: inline-block; margin-top: 0.5rem; font-family: var(--mono); font-size: 0.72rem; color: var(--gold); text-decoration: none; }
+  .wowhead:hover { text-decoration: underline; }
+  .qlink { color: var(--gold); cursor: pointer; text-decoration: underline; text-decoration-color: var(--gold-dim); }
+  .reward { display: flex; align-items: center; gap: 0.55rem; padding: 0.2rem 0; }
+  .icon {
+    flex: none; width: 30px; height: 30px; border-radius: 5px; border: 2px solid var(--q, var(--panel-edge));
+    background: url(../icon-placeholder.svg) center / cover; object-fit: cover; box-shadow: 0 0 6px -2px var(--q, transparent);
+  }
+  .kind { font-family: var(--mono); font-size: 0.62rem; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+  .money { font-family: var(--mono); }
+  .money .g { color: #e6c24a; } .money .s { color: #c8c8d0; } .money .c { color: #c7844a; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="back-row">
+    <a class="back-link" href="./">‹ Quest Browser</a>
+    <a class="back-link" href="/">‹ Back to August.</a>
+  </div>
+  <h1 id="title">Quest <span class="accent">Guide</span></h1>
+  <div class="banner" id="banner">Loading build info…</div>
+  <div id="guide"><div class="empty">Loading guide…</div></div>
+</div>
+
+<script src="quests.js"></script>
+<script>
+const slug = (location.pathname.match(/\/quests\/guide\/([A-Za-z0-9]+)\/?$/) || [])[1];
+const PROGRESS_KEY = `wow-quest-guide-progress:${slug}`;
+let data = null;
+
+// Check-off progress is per viewer, in localStorage. If storage is blocked
+// (private window etc.) ticking still works for this visit, it just isn't kept.
+let done = new Set();
+function readProgress() {
+  try { done = new Set(JSON.parse(localStorage.getItem(PROGRESS_KEY) || '[]')); } catch (e) { done = new Set(); }
+}
+function writeProgress() {
+  try {
+    if (done.size) localStorage.setItem(PROGRESS_KEY, JSON.stringify([...done]));
+    else localStorage.removeItem(PROGRESS_KEY);
+  } catch (e) {}
+}
+
+function stepHtml(step, i) {
+  const q = step.quest;
+  const note = step.note ? `<div class="author-note">${esc(step.note)}</div>` : '';
+  const tick = `<div class="tick"><input type="checkbox" id="s${i}" data-q="${step.quest_id}"${done.has(step.quest_id) ? ' checked' : ''}><span class="i">${i + 1}</span></div>`;
+  if (!q) {
+    return `<li class="step gone${done.has(step.quest_id) ? ' done' : ''}">${tick}<div>
+      <h2><label for="s${i}"><span class="qn">Quest #${step.quest_id}</span></label></h2>
+      <div class="meta pending">Quest unavailable: this id is no longer in the quest data.</div>${note}</div></li>`;
+  }
+  const meta = [
+    q.zone ? esc(q.zone) + (q.subzone ? ` · ${esc(q.subzone)}` : '') : 'Zone unknown',
+    q.req_level != null ? `requires ${q.req_level}` + (q.quest_level && q.quest_level !== q.req_level ? ` (quest ${q.quest_level})` : '') : null,
+    q.faction ? `<span class="fac ${q.faction}">${FACTION_LABEL[q.faction]}</span>` : null,
+    q.xp ? `${q.xp.toLocaleString()} XP` : null,
+    q.classes.length ? q.classes.join('/') + ' only' : null,
+  ].filter(Boolean).join(' · ');
+  const body = !q.revealed
+    ? `<h3>Rewards</h3>${rewardsHtml(null)}
+       <p class="sub" style="margin-top:0.4rem">Not yet revealed. Quest details are server-side, so this fills in once it's seen in-world.</p>`
+    : `${q.started_by ? `<div><span class="sub">Start:</span> ${who(q.started_by)}</div>` : ''}
+       ${q.finished_by ? `<div><span class="sub">Turn in:</span> ${who(q.finished_by)}</div>` : ''}
+       ${objectivesHtml(q)}
+       <h3>Rewards</h3>${rewardsHtml(q.rewards)}
+       ${q.details ? `<details class="more-info"><summary>Description</summary><p style="margin-top:0.4rem">${esc(q.details)}</p></details>` : ''}`;
+  return `<li class="step${done.has(step.quest_id) ? ' done' : ''}">${tick}<div>
+    <h2><label for="s${i}"><span class="qn">${q.name ? esc(q.name) : `Quest #${q.id}`}</span></label>
+      ${q.status === 'new' ? '<span class="badge">New to Forever</span>' : ''}</h2>
+    <div class="meta">${meta}</div>
+    ${note}
+    ${body}
+    <a class="wowhead" href="${q.wowhead_url}" target="_blank" rel="noopener">Wowhead →</a>
+  </div></li>`;
+}
+
+function renderProgress() {
+  const n = data.steps.length;
+  const k = data.steps.filter(s => done.has(s.quest_id)).length;
+  document.getElementById('bar').style.width = `${n ? (100 * k / n) : 0}%`;
+  document.getElementById('progressCount').textContent = `${k} / ${n} done`;
+  document.getElementById('resetBtn').disabled = !k;
+}
+
+function render() {
+  const n = data.steps.length;
+  const xp = data.steps.reduce((t, s) => t + (s.quest?.xp || 0), 0);
+  const gone = data.steps.filter(s => !s.quest).length;
+  const saved = new Date(data.created_at * 1000).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  document.getElementById('title').innerHTML = data.title ? esc(data.title) : 'Quest <span class="accent">Guide</span>';
+  document.title = `${data.title || 'Quest Guide'} — WoW: Forever`;
+  document.getElementById('guide').innerHTML = `
+    <div class="summary">
+      <span><b>${n}</b> step${n === 1 ? '' : 's'}</span>
+      ${data.faction ? `<span class="fac ${data.faction}">${FACTION_LABEL[data.faction]}</span>` : ''}
+      <span><b>${xp.toLocaleString()}</b> XP total (at-level)</span>
+      ${gone ? `<span class="pending" style="color:var(--gold)">${gone} unavailable</span>` : ''}
+      <span>saved ${esc(saved)}</span>
+    </div>
+    <div class="progress">
+      <div class="bar"><div id="bar"></div></div>
+      <span class="count" id="progressCount"></span>
+      <button class="btn quiet" id="resetBtn">Reset progress</button>
+    </div>
+    <div class="actions">
+      <button class="btn" id="copyBtn">Copy link</button>
+      <a class="btn quiet" href="./?from=${encodeURIComponent(data.id)}">Edit a copy</a>
+    </div>
+    <ol class="steps">${data.steps.map(stepHtml).join('')}</ol>
+    <p class="sub" style="margin-top:1rem">This guide is a fixed snapshot: it won't change under you. Quest details are current game data,
+      and XP is the full at-level reward, which drops once you out-level a quest. Your ticks are saved in this browser only.</p>`;
+
+  document.querySelectorAll('.tick input').forEach(cb => cb.addEventListener('change', () => {
+    const id = Number(cb.dataset.q);
+    cb.checked ? done.add(id) : done.delete(id);
+    cb.closest('.step').classList.toggle('done', cb.checked);
+    writeProgress();
+    renderProgress();
+  }));
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    if (!confirm('Untick every step?')) return;
+    done.clear();
+    writeProgress();
+    render();
+  });
+  document.getElementById('copyBtn').addEventListener('click', e => {
+    navigator.clipboard?.writeText(location.href).then(() => { e.target.textContent = 'Copied'; setTimeout(() => { e.target.textContent = 'Copy link'; }, 1500); }, () => {});
+  });
+  renderProgress();
+}
+
+(async function init() {
+  api('quests/meta').then(meta => {
+    document.getElementById('banner').innerHTML =
+      `<strong>Beta data</strong> — Forever build ${esc(meta.forever_build)} vs Classic Era ${esc(meta.classic_era_build)}. ` +
+      `Quest details and rewards come from QuestieDB ${esc(meta.questiedb_version || '')}, read live, so this guide improves as the data does. ` +
+      `New Forever quests stay "not yet revealed" until they're seen in-world.`;
+  }).catch(e => {
+    document.getElementById('banner').innerHTML = `<strong>Couldn't load build info</strong> — ${esc(e.message)}.`;
+  });
+  if (!slug) {
+    document.getElementById('guide').innerHTML = '<div class="empty">No guide id in this link.</div>';
+    return;
+  }
+  readProgress();
+  try {
+    data = await api(`guide/${slug}`);
+  } catch (e) {
+    document.getElementById('guide').innerHTML = `<div class="empty">Couldn't load this guide: ${esc(e.message)}</div>`;
+    return;
+  }
+  render();
+})();
+</script>
+</body>
+</html>
