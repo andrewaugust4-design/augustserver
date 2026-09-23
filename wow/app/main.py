@@ -431,9 +431,10 @@ async def gear_set_page(slug: str) -> FileResponse:
 
 
 # ── Quest Browser (sub-tool #2) ─────────────────────────────────────────────
-# Data: ingest/quests.py. Carryover details come from the vanilla 1.12
-# reference; new Forever quests are known only by id (+ a zone for a few),
-# because quest data is server-side and the client's QuestV2 is id-only.
+# Data: ingest/quests.py. Carryover detail + rewards come from QuestieDB
+# (plus the cmangos 1.12 reference for money / choice-vs-guaranteed); new
+# Forever quests are known only by id (+ a zone for a few), because quest
+# data is server-side and the client's QuestV2 is id-only.
 
 QUEST_SORTS = {"zone": "zone IS NULL, zone, min_level, name", "level": "min_level IS NULL, min_level, zone, name",
                "name": "name IS NULL, name, id", "id": "id"}
@@ -531,6 +532,7 @@ def quest_meta() -> dict:
         "classic_detailed": int(m.get("quests_classic_detailed", 0)),
         "classic_unrevealed": int(m.get("quests_classic_unrevealed", 0)),
         "new_with_zone": int(m.get("quests_new_with_zone", 0)),
+        "questiedb_version": m.get("quests_questiedb_version"),
     }
 
 
@@ -555,29 +557,35 @@ def quest_detail(quest_id: int) -> dict:
         if row is None:
             raise HTTPException(status_code=404, detail=f"No quest with id {quest_id}.")
         detail = json.loads(row["detail_json"]) if row["detail_json"] else {}
-        chain_ids = [detail.get(k) for k in ("prev_quest", "next_quest", "next_in_chain")]
-        linked = {}
-        ids = sorted({abs(i) for i in chain_ids if i})
-        if ids:
-            linked = {r["id"]: r["name"] for r in conn.execute(
-                f"SELECT id, name FROM quests WHERE id IN ({','.join('?' * len(ids))})", ids)}
+        chain = detail.get("chain", {})
+        ids = sorted({abs(q) for v in chain.values() for q in (v if isinstance(v, list) else [v]) if q})
+        names = {r["id"]: r["name"] for r in conn.execute(
+            f"SELECT id, name FROM quests WHERE id IN ({','.join('?' * len(ids))})", ids)} if ids else {}
 
-    def link(qid):
-        return {"id": abs(qid), "name": linked.get(abs(qid))} if qid else None
+    def links(v) -> list[dict]:
+        return [{"id": abs(q), "name": names.get(abs(q))} for q in (v if isinstance(v, list) else [v]) if q]
 
     classes = detail.get("required_classes") or 0
     return {
         **_quest_summary(row),
         "in_client": bool(row["in_client"]),
         "source": row["source"],
+        "objectives_text": [_quest_text(t) for t in detail.get("objectives_text", [])],
+        "objectives": detail.get("objectives", []),
         "details": _quest_text(detail.get("details")),
-        "objectives": _quest_text(detail.get("objectives")),
-        "objective_texts": [_quest_text(t) for t in detail.get("objective_texts", [])],
         "classes": [name for cid, name in QUEST_CLASS_BITS.items() if classes & (1 << (cid - 1))],
-        # PrevQuestId < 0 in the reference means "must be on that quest", not "have completed it".
-        "prev_quest": link(detail.get("prev_quest")), "prev_is_active": (detail.get("prev_quest") or 0) < 0,
-        "next_quest": link(detail.get("next_quest") or detail.get("next_in_chain")),
+        "started_by": detail.get("started_by"),
+        "finished_by": detail.get("finished_by"),
+        "chain": {
+            "requires": links(chain.get("pre_single", [])),
+            "requires_all": links(chain.get("pre_group", [])),
+            "leads_to": links(chain.get("next_in_chain")),
+            "exclusive_with": links(chain.get("exclusive_to", [])),
+            "breadcrumbs": links(chain.get("breadcrumbs", [])),
+            "breadcrumb_for": links(chain.get("breadcrumb_for")),
+        },
         "quest_line": detail.get("quest_line"), "quest_line_step": detail.get("quest_line_step"),
-        "rewards": None,  # server-side in Forever; see README
+        # None = not revealed (new Forever quests: server-side until seen in-world).
+        "rewards": detail.get("rewards"),
         "wowhead_url": f"https://www.wowhead.com/forever/quest={row['id']}",
     }
