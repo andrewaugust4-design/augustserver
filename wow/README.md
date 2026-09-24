@@ -2,8 +2,8 @@
 
 A FastAPI app for augustserver.com's WoW: Forever section — datamined tools
 for Blizzard's new Classic+ branch (beta since 2026-09-12, launching
-2026-11-04). Sub-tools so far: the **Gear Browser**, **Quest Browser** and
-**Talent Calculator**; more WoW tools slot into the same app/DB later
+2026-11-04). Sub-tools so far: the **Gear Browser**, **Quest Browser**,
+**Talent Calculator** and **Downrank Calculator**; more WoW tools slot into the same app/DB later
 (see "Adding another sub-tool" below).
 
 Deploys to `/opt/wow`, port 8065, proxied at `/wow/` — see the root repo's
@@ -580,6 +580,104 @@ the URL is the share mechanism.
   this one.
 - **All of this is provisional beta data**, including talent layout, ranks
   and numbers. The banner shows the build ids and counts.
+
+## Downrank Calculator (sub-tool #4, `/wow/downrank/`)
+
+Pick a caster class and enter a spell power value. Each spell-power spell gets
+a table with one row per rank: level, mana, cast time (or channel length /
+duration), base value, coefficient, **effective value** (average base +
+spell power × coefficient), **per mana** and **per second**. The most
+efficient rank per mana is starred. Everything recalculates in the page as you
+type, and because every rank gets the same share of spell power, the star
+moves to lower ranks as spell power rises. The scenario is in the URL
+(`downrank/priest?sp=450&lvl=60&sub20=1&spell=Flash+Heal`), and "Copy link"
+copies it.
+
+API: `/api/downrank/classes`, `/api/downrank/meta` and
+`/api/downrank/<class>`. Data is built by `ingest/downrank.py`, whose
+docstring has the details. foreverchanges.pro's Forever downrank calculator
+was the reference: our Forever numbers match its figures for Greater Heal R1
+(794–894, 85.7%), Renew R1 (45, 100%), PW:S R1 (44, 10%) and Smite R1
+(42.9%).
+
+**Which spells** (checked 2026-09-24 on 1.60.1.69977):
+- **Trainer and starting spells.** `SkillLineAbility` rows on a class skill
+  line with AcquireMethod 0 (trainer) or 2 (known at character creation,
+  which covers every class's rank-1 starters).
+- **Season of Discovery copies are skipped.** AcquireMethod 3 is a second
+  copy of several rank chains (Renew 425268…).
+- **Mana spells only**, with a heal, damage, leech or absorb effect that has
+  a spell-power coefficient. Ranks are grouped by name and ordered by
+  "Rank N".
+- **Excluded:**
+  - Hunters, whose spells scale with attack power.
+  - Seals and Lightning Shield, whose damage depends on weapon swings or hits
+    taken, so "per mana" doesn't mean anything.
+  - Prayer of Mending and Soul Link. Their numbers are server-side scripts.
+- **Result:** 6 classes, 90 spells, 512 ranks.
+- **Spells whose numbers live on another spell:**
+  - Arcane Missiles: each tick triggers a missile spell.
+  - Hurricane, Rain of Fire, Blizzard and Consecration: Forever rebuilt these
+    retail-style (a dummy effect plus an area trigger), and the per-tick
+    damage is on a companion spell with the same name, rank and level.
+  - Holy Shock: its heal and damage are separate companion spells, so it's
+    listed twice, as "Holy Shock (heal)" and "Holy Shock (damage)".
+  - Holy Nova: the heal is a linked spell of the same rank, cast at the same
+    time, shown as "also".
+
+**Coefficients come from the client.**
+- **Forever stores every coefficient in the client**
+  (`SpellEffect.EffectBonusCoefficient`), including ones Classic kept
+  server-side: PW:S 0.10, Holy Light 2.5 ÷ 3.5 and Flash of Light 1.5 ÷ 3.5.
+- **Over-time spells** store a per-tick value; the table shows totals (Renew
+  0.2 × 5 ticks = 100%).
+- **Anchors checked every ingest:** Greater Heal 0.857, Renew 1.0, PW:S 0.10,
+  Holy Light 0.714 and Flash of Light 0.429 (all OK).
+- **Classic formula cross-check.** The formulas are cast ÷ 3.5 (instants
+  1.5 s), duration ÷ 15 for over-time, duration ÷ 3.5 for channels, the
+  classic direct + DoT split for hybrids, AoE × 0.5, and × 0.5 for spells that
+  both damage and heal. 310 of 558 client coefficients match them. The rest
+  are mostly spells Forever retuned (Holy Fire, Flame Shock), AoE and snare
+  penalties Classic applied differently, and new spells. The client value
+  wins; the counts are in `meta.downrank_formula_*`.
+- **Special cases** fill in only where the client has 0, marked ‡:
+  - Ice Barrier 10%, from the patch 2.3 notes ("1175 + 10%" before 2.3).
+  - Fire Ward and Frost Ward 10%, from community coefficient lists.
+  - Shadow Ward has no reliable figure, so it isn't scaled.
+
+**The sub-level-20 penalty is an opt-in toggle.** Classic lowered the
+coefficient of ranks below level 20 by 3.75% per level. Era's client has the
+penalty built in (Lesser Heal R1 0.123), but Forever's doesn't (0.429). Either
+Forever dropped it or the server applies it; the client can't tell us which.
+So the numbers match the client by default, and "Classic sub-20 penalty"
+applies it on top. With it on, Lesser Heal R1 becomes exactly Era's 0.123.
+
+**Base values.** Forever stores the midpoint (`EffectBasePointsF`) plus a
+relative `Variance`, so min–max = mid × (1 ∓ variance ÷ 2). Forever lowered
+many base values: Greater Heal R1's midpoint went from 956 to 844, and Smite
+R8 from 393 to 170. That's why 80 of 90 spells show "Changed from Classic";
+hovering ▲ on a rank lists the exact changes (mana, cast, duration, base
+midpoint, coefficient). Values grow by `EffectRealPointsPerLevel` up to the
+rank's `MaxLevel`. The **Level 60 †** option shows that grown value, which is
+provisional.
+
+**Mana.** The cost is `SpellPower.ManaCost`, or for retail-style
+percentage costs (Arcane Blast 15%, Swiftmend 20%…) `PowerCostPct` × the
+class's base mana at 60, from the client's `PlayerExpectedStat`.
+
+**Caveats (also on the page):**
+- **Base spells, unbuffed, no talents**, the same as the gear set sheet.
+  Talents that change coefficients, costs or cast times aren't modelled, and
+  neither are crits.
+- **One spell power number.** Forever merged bonus healing and bonus damage
+  into one stat. School-specific gear ("+fire damage") still only helps that
+  school, so enter the spell power that applies to the spell.
+- **"Per second"** divides by the cast time, channel length or the 1.5 s
+  global cooldown, whichever is longest.
+- **All of this is beta data** and changes from build to build.
+- **Future hook:** importing spell power from a saved gear set
+  (`gear/set/<id>`). The set sheet doesn't total spell power yet (it's listed
+  under "other gear bonuses"), so that comes first.
 
 ## Refreshing the data
 

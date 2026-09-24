@@ -39,7 +39,7 @@ section.
   Settings) via `data-section` home-cards.
 - **WoW: Forever hub** (`section-wowforever`, icon-gold "WoW: Forever" nav item):
   card grid of WoW: Forever sub-tools (Gear Browser `/wow/gear/`, Quest
-  Browser `/wow/quests/`, Talent Calculator `/wow/talents/`), same plain-`<a>` pattern as the Tools hub. Unlike the other two
+  Browser `/wow/quests/`, Talent Calculator `/wow/talents/`, Downrank Calculator `/wow/downrank/`), same plain-`<a>` pattern as the Tools hub. Unlike the other two
   tools categories, WoW: Forever is a multi-tool **suite** — one FastAPI app at
   `/opt/wow` shares a data layer across sub-tools; see `wow/README.md`. New WoW
   sub-tools get a card here, not a new top-level hub.
