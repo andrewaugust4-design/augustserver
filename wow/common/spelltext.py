@@ -95,12 +95,19 @@ class SpellBook:
         self.aura_opts = {int(r["SpellID"]): r for r in _read(build_dir / "SpellAuraOptions.csv")
                           if int(r.get("DifficultyID") or 0) == 0}
         self.radius = {int(r["ID"]): _num(r["Radius"]) for r in _read(build_dir / "SpellRadius.csv")}
+        # (spell_id, effect_index) → value, replacing the stored base points.
+        # Talent ranks use this: Forever keeps one spell per talent and puts
+        # each rank's numbers on a curve (see ingest/talents.py).
+        self.overrides: dict[tuple[int, int], float] = {}
 
     def has_text(self, spell_id: int) -> bool:
         return bool(self.desc.get(spell_id, "").strip())
 
     # ── effect values ──
     def value_range(self, spell_id: int, index: int) -> tuple[float, float] | None:
+        if (spell_id, index) in self.overrides:
+            v = self.overrides[(spell_id, index)]
+            return v, v
         eff = self.effects.get(spell_id, {}).get(index)
         if eff is None:
             return None
@@ -167,13 +174,19 @@ class SpellBook:
             out = self._token(sid, letter, int(idx) if idx else 1)
             if out is None:
                 return m.group(0)
-            if numeric:  # inside ${...}: raw number, no "x to y"
-                return fmt_number(self.value(sid, max(int(idx or 1) - 1, 0))) if letter.lower() in "sm" else out
+            if numeric:  # inside ${...}: raw number, no "x to y" / "12 sec"
+                if letter.lower() in "sm":
+                    return fmt_number(self.value(sid, max(int(idx or 1) - 1, 0)))
+                if letter.lower() == "d":
+                    return fmt_number(self.duration.get(sid, 0) / 1000)
+                return out
             return out
         return _TOKEN.sub(repl, text)
 
-    def render(self, spell_id: int) -> str | None:
-        text = self.desc.get(spell_id, "").strip()
+    def render(self, spell_id: int, text: str | None = None) -> str | None:
+        """Tooltip text for spell_id; `text` renders a caller-prepared
+        description in place of the spell's own."""
+        text = (self.desc.get(spell_id, "") if text is None else text).strip()
         if not text:
             return None
 

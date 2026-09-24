@@ -11,6 +11,7 @@ build just re-reads cached CSVs and rewrites the same rows.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sqlite3
 import sys
@@ -22,7 +23,7 @@ from common import icons
 from common.armor import ARMOR_TABLES
 from common.constants import CLASSIC_ERA_PRODUCT, FOREVER_PRODUCT
 
-from . import effects, quests, validate_character, wago_client
+from . import effects, quests, talents, validate_character, wago_client
 from .character_data import CHARACTER_TABLES, load_character_data
 from .normalize import diff_items, load_armor_tables, load_budgets, parse_build, write_db
 from .validate import ValidationError, validate
@@ -80,6 +81,10 @@ def main() -> None:
     for table in quests.FOREVER_TABLES:
         wago_client.download_csv(table, forever_version, CACHE_DIR, force=args.force)
     for table in quests.ERA_TABLES:
+        wago_client.download_csv(table, era_version, CACHE_DIR, force=args.force)
+    for table in talents.FOREVER_TABLES:
+        wago_client.download_csv(table, forever_version, CACHE_DIR, force=args.force)
+    for table in talents.ERA_TABLES:
         wago_client.download_csv(table, era_version, CACHE_DIR, force=args.force)
 
     budgets = load_budgets(CACHE_DIR / forever_version / "RandPropPoints.csv")
@@ -141,8 +146,15 @@ def main() -> None:
     quest_stats.update(xp_checked=xp["xp_checked"], xp_matched=xp["xp_matched"])
     meta.update({f"quests_{k}": str(v) for k, v in quest_stats.items()})
 
+    talent_rows, talent_stats, talent_problems = talents.build_talents(CACHE_DIR / forever_version, CACHE_DIR / era_version)
+    log.info("Talents: %s", talent_stats)
+    for problem in talent_problems:
+        log.error("Talent check FAILED: %s", problem)
+    meta.update({f"talents_{k}": str(v) for k, v in talent_stats.items()})
+    meta["talents_problems"] = str(len(talent_problems))
+
     character = load_character_data(CACHE_DIR / forever_version)
-    write_db(DB_PATH, meta, merged, budgets, character, set_rows, quest_rows)
+    write_db(DB_PATH, meta, merged, budgets, character, set_rows, quest_rows, talent_rows)
     log.info("Ingest complete: %s", meta)
 
     # Set-builder sheet cross-checks: logged, never blocking (see validate_character.py).
@@ -155,6 +167,12 @@ def main() -> None:
         log.exception("Character sheet validation crashed (the refresh itself succeeded)")
     finally:
         conn.close()
+
+    # Talent icons come from wago.tools by FileDataID (no API keys needed);
+    # already-cached ones are skipped, so this is quick after the first run.
+    fdids = sorted({t["icon"] for r in talent_rows for t in json.loads(r[4])["talents"] if t["icon"]}
+                   | {tr["icon"] for r in talent_rows for tr in json.loads(r[4])["trees"] if tr["icon"]})
+    log.info("Talent icons: %s", icons.warm_file_icons(fdids, forever_version))
 
     if args.warm_icons:
         if not icons.enabled():

@@ -18,7 +18,7 @@ from common.constants import (
     WEAPON_SUBCLASS_NAMES,
 )
 from common.stats import CLASSIC_RESISTANCE_COLUMN_TO_STAT, stat_budget, stat_info, stat_value
-from . import character_data, quests
+from . import character_data, quests, talents
 from .wago_client import read_csv
 
 
@@ -258,7 +258,7 @@ BUDGET_COLUMNS = [f"{family}_{i}" for family in ("Epic", "Superior", "Good") for
 
 def write_db(db_path: Path, meta: dict[str, str], items: dict[int, dict], budgets: dict[int, dict],
              character: dict[str, list[tuple]] | None = None, item_sets: list[tuple] | None = None,
-             quest_rows: list[tuple] | None = None) -> None:
+             quest_rows: list[tuple] | None = None, talent_rows: list[tuple] | None = None) -> None:
     """Rebuild the DB contents in a single transaction, so the running app
     never sees a half-written items table."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -309,6 +309,8 @@ def write_db(db_path: Path, meta: dict[str, str], items: dict[int, dict], budget
             conn.executemany("INSERT INTO item_sets VALUES (?, ?, ?, ?, ?)", item_sets)
         if quest_rows is not None:
             quests.write_tables(conn, quest_rows)
+        if talent_rows is not None:
+            talents.write_tables(conn, talent_rows)
         conn.executemany(
             "INSERT INTO meta (key, value) VALUES (?, ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",

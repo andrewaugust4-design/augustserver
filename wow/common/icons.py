@@ -141,3 +141,95 @@ def warm(item_ids: list[int], rate_per_sec: float = 5.0) -> dict[str, int]:
             log.info("Icon warm progress: %d/%d %s", n, len(item_ids), counts)
         time.sleep(max(0.0, interval - (time.monotonic() - started)))
     return counts
+
+
+# ── Icons by FileDataID (talents, talent trees) ─────────────────────────────
+# Spell/talent icons resolve straight from the datamine: SpellMisc gives each
+# spell's icon FileDataID, and wago.tools serves the client file (a 64×64
+# BLP) by that id, the same endpoint ingest/maps.py uses for map tiles. No
+# Blizzard API or keys involved. Converted to JPEG once, then served from
+# disk like item icons.
+
+FILE_URL = "https://wago.tools/api/casc/{fdid}?version={build}"
+FILE_ICON_DIR = ICON_DIR / "file"
+USER_AGENT = "augustserver.com wow (talent icon cache)"
+
+
+def file_icon_path(fdid: int) -> Path:
+    return FILE_ICON_DIR / f"{fdid}.jpg"
+
+
+def _missing_file_conn() -> sqlite3.Connection:
+    conn = _missing_conn()
+    conn.execute("CREATE TABLE IF NOT EXISTS missing_file (fdid INTEGER PRIMARY KEY, checked_at REAL NOT NULL)")
+    return conn
+
+
+def _file_recently_missing(fdid: int) -> bool:
+    with _missing_file_conn() as conn:
+        row = conn.execute("SELECT checked_at FROM missing_file WHERE fdid = ?", (fdid,)).fetchone()
+    return row is not None and time.time() - row[0] < MISSING_RETRY_SECONDS
+
+
+def fetch_file_icon(fdid: int, build: str) -> bool:
+    """Download + convert one icon. False if wago.tools has no such file
+    (negative-cached); network/5xx errors raise requests.RequestException."""
+    from io import BytesIO
+
+    from PIL import Image  # only needed on a cold miss
+
+    resp = requests.get(FILE_URL.format(fdid=fdid, build=build), timeout=30, headers={"User-Agent": USER_AGENT})
+    if resp.status_code == 404 or (resp.ok and not resp.content.startswith(b"BLP")):
+        with _missing_file_conn() as conn:
+            conn.execute("INSERT OR REPLACE INTO missing_file VALUES (?, ?)", (fdid, time.time()))
+        return False
+    resp.raise_for_status()
+    image = Image.open(BytesIO(resp.content)).convert("RGB")
+    FILE_ICON_DIR.mkdir(parents=True, exist_ok=True)
+    path = file_icon_path(fdid)
+    tmp = path.with_suffix(".tmp")
+    image.save(tmp, "JPEG", quality=90)
+    tmp.replace(path)
+    return True
+
+
+def get_file_icon(fdid: int, build: str | None) -> Path | None:
+    """Cached icon path, fetching on a miss; None → serve the placeholder."""
+    path = file_icon_path(fdid)
+    if path.exists():
+        return path
+    if not build or _file_recently_missing(fdid):
+        return None
+    with _id_locks_guard:
+        lock = _id_locks.setdefault(-fdid, threading.Lock())  # negative keys: no clash with item ids
+    with lock:
+        if path.exists():
+            return path
+        try:
+            with _fetch_slots:
+                return path if fetch_file_icon(fdid, build) else None
+        except (requests.RequestException, OSError) as exc:
+            log.warning("Icon fetch for file %s failed (will retry next request): %s", fdid, exc)
+            return None
+        finally:
+            with _id_locks_guard:
+                _id_locks.pop(-fdid, None)
+
+
+def warm_file_icons(fdids: list[int], build: str, pause: float = 0.25) -> dict[str, int]:
+    """Pre-fetch talent icons; resumable (cached/recently-missing skipped)."""
+    counts = {"cached": 0, "fetched": 0, "missing": 0, "skipped_missing": 0, "errors": 0}
+    for fdid in fdids:
+        if file_icon_path(fdid).exists():
+            counts["cached"] += 1
+            continue
+        if _file_recently_missing(fdid):
+            counts["skipped_missing"] += 1
+            continue
+        try:
+            counts["fetched" if fetch_file_icon(fdid, build) else "missing"] += 1
+        except (requests.RequestException, OSError) as exc:
+            counts["errors"] += 1
+            log.warning("Icon warm: file %s failed: %s", fdid, exc)
+        time.sleep(pause)
+    return counts
