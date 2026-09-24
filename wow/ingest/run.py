@@ -23,7 +23,7 @@ from common import icons
 from common.armor import ARMOR_TABLES
 from common.constants import CLASSIC_ERA_PRODUCT, FOREVER_PRODUCT
 
-from . import effects, quests, talents, validate_character, wago_client
+from . import downrank, effects, quests, talents, validate_character, wago_client
 from .character_data import CHARACTER_TABLES, load_character_data
 from .normalize import diff_items, load_armor_tables, load_budgets, parse_build, write_db
 from .validate import ValidationError, validate
@@ -85,6 +85,10 @@ def main() -> None:
     for table in talents.FOREVER_TABLES:
         wago_client.download_csv(table, forever_version, CACHE_DIR, force=args.force)
     for table in talents.ERA_TABLES:
+        wago_client.download_csv(table, era_version, CACHE_DIR, force=args.force)
+    for table in downrank.FOREVER_TABLES:
+        wago_client.download_csv(table, forever_version, CACHE_DIR, force=args.force)
+    for table in downrank.ERA_TABLES:
         wago_client.download_csv(table, era_version, CACHE_DIR, force=args.force)
 
     budgets = load_budgets(CACHE_DIR / forever_version / "RandPropPoints.csv")
@@ -154,7 +158,16 @@ def main() -> None:
     meta["talents_problems"] = str(len(talent_problems))
 
     character = load_character_data(CACHE_DIR / forever_version)
-    write_db(DB_PATH, meta, merged, budgets, character, set_rows, quest_rows, talent_rows)
+    base_mana_60 = {row[0]: row[2] for row in character["class_level"] if row[1] == 60}
+    downrank_rows, downrank_stats, downrank_problems = downrank.build_downrank(
+        CACHE_DIR / forever_version, CACHE_DIR / era_version, base_mana_60)
+    log.info("Downrank: %s", downrank_stats)
+    for problem in downrank_problems:
+        log.error("Downrank anchor FAILED: %s", problem)
+    meta.update({f"downrank_{k}": str(v) for k, v in downrank_stats.items()})
+    meta["downrank_problems"] = str(len(downrank_problems))
+
+    write_db(DB_PATH, meta, merged, budgets, character, set_rows, quest_rows, talent_rows, downrank_rows)
     log.info("Ingest complete: %s", meta)
 
     # Set-builder sheet cross-checks: logged, never blocking (see validate_character.py).
