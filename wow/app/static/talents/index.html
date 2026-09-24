@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script>document.write('<base href="' + location.pathname.replace(/talents(\/.*)?$/, '') + 'talents/">');</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Talent Calculator — WoW: Forever</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #1b160e;
+    --panel: #251e12;
+    --panel-edge: #3d331d;
+    --ink: #f0e6d2;
+    --ink-dim: #a89878;
+    --gold: #e0a82e;
+    --gold-dim: #8a6b1f;
+    --alert: #e2604c;
+    --ok: #8fc79a;
+    --green: #3ddc6a;
+    --new: #34d399;
+    --reworked: #6aa5ff;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+    --sans: "Space Grotesk", system-ui, sans-serif;
+    --cell: 46px;
+    --gap: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--sans); min-height: 100vh; padding: 2rem 1.25rem 4rem; }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+
+  .back-links { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+  .back-link {
+    display: inline-flex; align-items: center; gap: 0.45rem;
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink-dim); text-decoration: none;
+    border: 1px solid var(--panel-edge); border-radius: 6px;
+    padding: 0.45rem 0.85rem; transition: color 0.15s, border-color 0.15s;
+  }
+  .back-link:hover { color: var(--gold); border-color: var(--gold); }
+  h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 700; letter-spacing: -0.01em; margin-bottom: 0.9rem; }
+  h1 .accent { color: var(--gold); }
+
+  .banner {
+    background: rgba(224, 168, 46, 0.08); border: 1px solid rgba(224, 168, 46, 0.35); border-radius: 10px;
+    padding: 0.75rem 1rem; margin-bottom: 1.5rem; font-size: 0.78rem; line-height: 1.55;
+  }
+  .banner strong { color: var(--gold); }
+  .banner .meta-line { display: block; margin-top: 0.3rem; font-family: var(--mono); font-size: 0.68rem; color: var(--ink-dim); }
+
+  .classes { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-bottom: 1.2rem; }
+  .class-btn {
+    font-family: var(--sans); font-size: 0.85rem; font-weight: 500; cursor: pointer;
+    padding: 0.45rem 0.8rem; border-radius: 8px; background: var(--panel);
+    border: 1px solid var(--panel-edge); color: var(--cc, var(--ink));
+  }
+  .class-btn:hover { border-color: var(--cc); }
+  .class-btn.on { background: color-mix(in srgb, var(--cc) 16%, var(--panel)); border-color: var(--cc); }
+  .class-btn .n { font-family: var(--mono); font-size: 0.62rem; color: var(--ink-dim); margin-left: 0.3rem; }
+
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem; margin-bottom: 1rem;
+    background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 10px; padding: 0.7rem 0.9rem; }
+  .points { font-family: var(--mono); font-size: 0.8rem; }
+  .points b { color: var(--gold); font-weight: 500; font-size: 1rem; }
+  .points .split { color: var(--ink-dim); margin-left: 0.5rem; }
+  .points .lvl { color: var(--ink-dim); display: block; font-size: 0.68rem; margin-top: 0.15rem; }
+  .toolbar .grow { flex: 1; }
+  .btn {
+    font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 0.5rem 0.8rem; border-radius: 8px; cursor: pointer;
+    background: rgba(224,168,46,0.12); border: 1px solid var(--gold-dim); color: var(--gold);
+  }
+  .btn:hover { border-color: var(--gold); }
+  .btn.quiet { background: transparent; border-color: var(--panel-edge); color: var(--ink-dim); }
+  .btn.quiet:hover { color: var(--ink); border-color: var(--ink-dim); }
+  .btn.on { background: rgba(226,96,76,0.15); border-color: var(--alert); color: var(--alert); }
+  .share { display: flex; gap: 0.4rem; align-items: center; width: 100%; }
+  .share input {
+    flex: 1; min-width: 0; font-family: var(--mono); font-size: 0.72rem; color: var(--ink-dim); background: var(--bg);
+    border: 1px solid var(--panel-edge); border-radius: 7px; padding: 0.42rem 0.55rem;
+  }
+  .msg { font-size: 0.74rem; color: var(--ok); min-height: 1em; }
+  .msg.warn { color: var(--alert); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; font-size: 0.72rem; color: var(--ink-dim); margin-bottom: 1rem; }
+  .legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+
+  .trees { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+  @media (max-width: 900px) { .trees { grid-template-columns: 1fr; justify-items: center; } }
+  .tree { background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 12px; padding: 0.8rem 0.8rem 1rem; width: 100%; max-width: 340px; }
+  .tree-head { display: flex; align-items: center; gap: 0.55rem; margin-bottom: 0.8rem; }
+  .tree-head img { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--panel-edge); }
+  .tree-head h2 { font-size: 0.98rem; font-weight: 700; flex: 1; }
+  .tree-head .pts { font-family: var(--mono); font-size: 0.85rem; color: var(--gold); }
+  .tree-head .reset { background: none; border: none; color: var(--ink-dim); cursor: pointer; font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; }
+  .tree-head .reset:hover { color: var(--alert); }
+
+  .grid { position: relative; margin: 0 auto;
+    width: calc(4 * var(--cell) + 3 * var(--gap)); height: calc(7 * var(--cell) + 6 * var(--gap)); }
+  .grid svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  .arrow { stroke: #5a4d33; stroke-width: 4; fill: none; }
+  .arrow-head { fill: #5a4d33; }
+  .arrow.lit { stroke: var(--gold); }
+  .arrow-head.lit { fill: var(--gold); }
+  .rowline { stroke: rgba(255,255,255,0.04); stroke-width: 1; }
+
+  .talent {
+    position: absolute; width: var(--cell); height: var(--cell); padding: 0; cursor: pointer;
+    border-radius: 7px; border: 2px solid #4a4336; background: #111 url(../icon-placeholder.svg) center / cover;
+    -webkit-touch-callout: none; user-select: none; touch-action: manipulation;
+  }
+  .talent img { width: 100%; height: 100%; border-radius: 5px; display: block; pointer-events: none; }
+  .talent.locked img { filter: grayscale(1) brightness(0.55); }
+  .talent.available { border-color: var(--green); box-shadow: 0 0 6px -1px rgba(61,220,106,0.6); }
+  .talent.partial { border-color: var(--green); box-shadow: 0 0 10px 0 rgba(61,220,106,0.75); }
+  .talent.maxed { border-color: var(--gold); box-shadow: 0 0 10px 0 rgba(224,168,46,0.85); }
+  .talent:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .rank {
+    position: absolute; right: -9px; bottom: -8px; font-family: var(--mono); font-size: 0.64rem; line-height: 1;
+    padding: 0.14rem 0.28rem; border-radius: 5px; background: #0d0b07; border: 1px solid #4a4336; color: var(--ink-dim);
+  }
+  .available .rank, .partial .rank { color: var(--green); border-color: rgba(61,220,106,0.5); }
+  .maxed .rank { color: var(--gold); border-color: var(--gold-dim); }
+  .flag {
+    position: absolute; left: -7px; top: -7px; font-family: var(--mono); font-size: 0.55rem; font-weight: 500; line-height: 1;
+    padding: 0.14rem 0.24rem; border-radius: 4px; background: #0d0b07; border: 1px solid;
+  }
+  .flag.new { color: var(--new); border-color: var(--new); }
+  .flag.reworked { color: var(--reworked); border-color: var(--reworked); }
+  body.no-badges .flag { display: none; }
+  .touch-only { display: none !important; }
+  @media (hover: none) { .touch-only { display: inline-flex !important; } .mouse-only { display: none !important; } }
+
+  .tip {
+    position: fixed; z-index: 10; max-width: 330px; pointer-events: none;
+    background: #0e0c08f2; border: 1px solid #5a4d33; border-radius: 8px; padding: 0.65rem 0.75rem;
+    font-size: 0.78rem; line-height: 1.45; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  .tip[hidden] { display: none; }
+  .tip.pinned { pointer-events: auto; }
+  .tip h3 { font-size: 0.92rem; margin-bottom: 0.1rem; }
+  .tip .rk { font-family: var(--mono); font-size: 0.68rem; color: var(--ink-dim); margin-bottom: 0.35rem; }
+  .tip .req { color: var(--alert); font-size: 0.74rem; }
+  .tip p { white-space: pre-line; color: #ffd100; }
+  .tip .next { color: var(--ink-dim); font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 0.45rem; }
+  .tip .prov { font-size: 0.68rem; color: var(--gold); margin-top: 0.35rem; }
+  .tip .classic { margin-top: 0.55rem; padding-top: 0.5rem; border-top: 1px solid #3d331d; }
+  .tip .classic .lbl { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); }
+  .tip .classic p { color: var(--ink-dim); }
+  .tip .changes { font-size: 0.7rem; color: var(--reworked); margin-top: 0.25rem; }
+  .tip .tag { font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.08rem 0.4rem; border-radius: 999px; border: 1px solid; margin-left: 0.4rem; vertical-align: 2px; }
+  .tip .tag.new { color: var(--new); }
+  .tip .tag.reworked { color: var(--reworked); }
+  .tip .tip-ctl { display: none; gap: 0.4rem; margin-top: 0.6rem; }
+  .tip.pinned .tip-ctl { display: flex; }
+  .tip-ctl button { flex: 1; font-family: var(--mono); font-size: 0.9rem; padding: 0.35rem; border-radius: 6px; background: var(--panel); color: var(--ink); border: 1px solid var(--panel-edge); cursor: pointer; }
+
+  .removed { margin-top: 1.4rem; background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 12px; padding: 0.8rem 1rem; font-size: 0.8rem; }
+  .removed summary { cursor: pointer; font-weight: 500; }
+  .removed summary .sub { font-family: var(--mono); font-size: 0.68rem; color: var(--ink-dim); font-weight: 400; }
+  .removed ul { list-style: none; padding: 0; margin-top: 0.6rem; display: grid; gap: 0.45rem; }
+  .removed li { line-height: 1.45; }
+  .removed li .where { font-family: var(--mono); font-size: 0.66rem; color: var(--ink-dim); }
+  .removed li p { color: var(--ink-dim); font-size: 0.76rem; }
+  .note { font-size: 0.74rem; color: var(--ink-dim); line-height: 1.55; margin-top: 1rem; }
+  .empty { font-size: 0.85rem; color: var(--ink-dim); padding: 1rem 0; }
+  @media (max-width: 420px) { :root { --cell: 42px; --gap: 12px; } body { padding: 1.5rem 0.9rem 3rem; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="back-links">
+    <a class="back-link" href="../">‹ WoW: Forever</a>
+    <a class="back-link" href="/">‹ Back to August.</a>
+  </div>
+  <h1>Talent <span class="accent">Calculator</span></h1>
+  <div class="banner" id="banner">Loading build info…</div>
+
+  <div class="classes" id="classes"></div>
+  <div id="calc"><div class="empty">Pick a class to start.</div></div>
+</div>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+const CLASS_COLORS = { druid: '#ff7c0a', hunter: '#aad372', mage: '#3fc7eb', paladin: '#f48cba', priest: '#ffffff',
+  rogue: '#fff468', shaman: '#2d8cf0', warlock: '#8788ee', warrior: '#c69b6d' };
+const PLACEHOLDER = '../icon-placeholder.svg';
+const state = { classes: [], data: null, ranks: {}, removeMode: false, pinned: null };
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+async function api(path) {
+  const res = await fetch('../api/' + path);
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+  return res.json();
+}
+const icon = fdid => fdid ? `../api/fileicon/${fdid}.jpg` : PLACEHOLDER;
+
+// ── rules ────────────────────────────────────────────────────────────────
+const d = () => state.data;
+const rank = t => state.ranks[t.id] || 0;
+const byId = id => d().talents.find(t => t.id === id);
+const treePoints = tab => d().talents.reduce((s, t) => s + (t.tab === tab ? rank(t) : 0), 0);
+const totalPoints = () => d().talents.reduce((s, t) => s + rank(t), 0);
+
+function addBlockers(t) {
+  const out = [];
+  if (rank(t) >= t.max_rank) return out;
+  const need = t.row * d().per_row;
+  if (treePoints(t.tab) < need) out.push(`Requires ${need} points in ${d().trees[t.tab].name} Talents`);
+  for (const pid of t.prereqs) {
+    const p = byId(pid);
+    if (rank(p) < p.max_rank) out.push(`Requires ${p.max_rank} point${p.max_rank > 1 ? 's' : ''} in ${p.name}`);
+  }
+  if (totalPoints() >= d().points) out.push(`All ${d().points} points spent`);
+  return out;
+}
+const canAdd = t => rank(t) < t.max_rank && addBlockers(t).length === 0;
+
+function canRemove(t) {
+  if (!rank(t)) return false;
+  // A talent that another talent (with points) depends on stays maxed.
+  if (d().talents.some(c => rank(c) && c.prereqs.includes(t.id))) return false;
+  // Every row above that has points must still be reachable: points spent in
+  // the rows below it (after this removal) ≥ 5 × row.
+  const tree = d().talents.filter(x => x.tab === t.tab);
+  const deepest = Math.max(...tree.filter(x => rank(x)).map(x => x.row));
+  for (let row = t.row + 1; row <= deepest; row++) {
+    if (!tree.some(x => x.row === row && rank(x))) continue;
+    const below = tree.filter(x => x.row < row).reduce((s, x) => s + rank(x), 0) - 1;
+    if (below < row * d().per_row) return false;
+  }
+  return true;
+}
+
+function change(t, delta) {
+  if (delta > 0 ? !canAdd(t) : !canRemove(t)) return false;
+  state.ranks[t.id] = rank(t) + delta;
+  if (!state.ranks[t.id]) delete state.ranks[t.id];
+  render();
+  syncUrl();
+  return true;
+}
+
+// ── build string: per tree, one rank digit per talent in (row, col) order,
+// trailing zeros trimmed; trees joined by "-" (e.g. "05320-0503-2"). ──────
+function treeOrder(tab) {
+  return d().talents.filter(t => t.tab === tab).sort((a, b) => a.row - b.row || a.col - b.col);
+}
+function encode() {
+  const parts = d().trees.map(tr => treeOrder(tr.index).map(t => rank(t)).join('').replace(/0+$/, ''));
+  while (parts.length && !parts[parts.length - 1]) parts.pop();
+  return parts.join('-');
+}
+function decode(str) {
+  // Replayed through the rules, row by row, so a string from older talent
+  // data (or a hand-edited one) can only produce a legal build.
+  state.ranks = {};
+  const want = {};
+  let asked = 0;
+  (str || '').split('-').slice(0, d().trees.length).forEach((part, tab) => {
+    treeOrder(tab).forEach((t, i) => {
+      const n = parseInt(part[i] || '0', 10);
+      if (n > 0) { want[t.id] = Math.min(n, t.max_rank); asked += n; }
+    });
+  });
+  let progress = true;
+  while (progress) {
+    progress = false;
+    for (const t of [...d().talents].sort((a, b) => a.row - b.row || a.tab - b.tab || a.col - b.col)) {
+      while (rank(t) < (want[t.id] || 0) && canAdd(t)) { state.ranks[t.id] = rank(t) + 1; progress = true; }
+    }
+  }
+  return asked - totalPoints();
+}
+
+function pageUrl() {
+  const code = encode();
+  return new URL(d().slug + (code ? '/' + code : ''), document.baseURI).href;
+}
+function syncUrl() {
+  history.replaceState(null, '', pageUrl());
+  const input = document.getElementById('shareUrl');
+  if (input) input.value = location.href;
+}
+
+// ── rendering ────────────────────────────────────────────────────────────
+function cellXY(t) {
+  const s = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell'));
+  const g = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap'));
+  return { x: t.col * (s + g), y: t.row * (s + g), s };
+}
+
+function arrowsSvg(tab) {
+  let out = '';
+  for (const t of d().talents.filter(x => x.tab === tab)) {
+    for (const pid of t.prereqs) {
+      const p = byId(pid), a = cellXY(p), b = cellXY(t);
+      const lit = rank(p) >= p.max_rank ? ' lit' : '';
+      const h = a.s / 2;
+      let x1, y1, x2, y2, head;
+      if (p.col === t.col) {  // straight down
+        x1 = x2 = a.x + h; y1 = a.y + a.s; y2 = b.y - 2;
+        head = `${x2 - 7},${y2 - 8} ${x2 + 7},${y2 - 8} ${x2},${y2}`;
+        y2 -= 6;
+      } else {  // same row, sideways
+        const dir = t.col > p.col ? 1 : -1;
+        y1 = y2 = a.y + h; x1 = dir > 0 ? a.x + a.s : a.x; x2 = dir > 0 ? b.x - 2 : b.x + b.s + 2;
+        head = `${x2 - 8 * dir},${y2 - 7} ${x2 - 8 * dir},${y2 + 7} ${x2},${y2}`;
+        x2 -= 6 * dir;
+      }
+      out += `<line class="arrow${lit}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/><polygon class="arrow-head${lit}" points="${head}"/>`;
+    }
+  }
+  return out;
+}
+
+function talentClass(t) {
+  const r = rank(t);
+  if (r >= t.max_rank) return 'maxed';
+  if (r > 0) return 'partial';
+  return canAdd(t) ? 'available' : 'locked';
+}
+
+function render() {
+  const data = d();
+  const total = totalPoints();
+  const split = data.trees.map(tr => treePoints(tr.index)).join(' / ');
+  const trees = data.trees.map(tr => {
+    const cells = data.talents.filter(t => t.tab === tr.index).map(t => {
+      const { x, y } = cellXY(t);
+      const flag = t.status === 'new' ? '<span class="flag new">NEW</span>'
+        : t.status === 'reworked' ? '<span class="flag reworked">RW</span>' : '';
+      return `<button class="talent ${talentClass(t)}" data-id="${t.id}" style="left:${x}px;top:${y}px"
+        aria-label="${esc(t.name)}, rank ${rank(t)} of ${t.max_rank}">
+        <img src="${icon(t.icon)}" alt="" loading="lazy" onerror="this.onerror=null;this.src='${PLACEHOLDER}'">
+        ${flag}<span class="rank">${rank(t)}/${t.max_rank}</span></button>`;
+    }).join('');
+    return `<section class="tree">
+      <div class="tree-head">
+        <img src="${icon(tr.icon)}" alt="" onerror="this.onerror=null;this.src='${PLACEHOLDER}'">
+        <h2>${esc(tr.name)}</h2>
+        <span class="pts">${treePoints(tr.index)}</span>
+        <button class="reset" data-tab="${tr.index}" title="Reset this tree">Reset</button>
+      </div>
+      <div class="grid"><svg>${arrowsSvg(tr.index)}</svg>${cells}</div>
+    </section>`;
+  }).join('');
+  const removed = data.removed.length ? `<details class="removed"><summary>Removed from Classic
+      <span class="sub">${data.removed.length} Classic Era ${esc(data.name)} talents have no Forever counterpart</span></summary>
+      <ul>${data.removed.map(r => `<li><strong>${esc(r.name)}</strong> <span class="where">${esc(r.tab_name)} · ${r.max_rank} rank${r.max_rank > 1 ? 's' : ''}</span>
+        ${r.text ? `<p>${esc(r.text)}</p>` : ''}</li>`).join('')}</ul></details>` : '';
+
+  document.getElementById('calc').innerHTML = `
+    <div class="toolbar">
+      <div class="points"><b>${total}</b> / ${data.points} points<span class="split">${split}</span>
+        <span class="lvl">${total ? `Requires level ${9 + total}` : 'First point at level 10'} · ${data.points - total} left</span></div>
+      <div class="grow"></div>
+      <button class="btn quiet${state.removeMode ? ' on' : ''}" id="removeMode" title="For touch screens: taps remove points instead of adding them">${state.removeMode ? 'Removing' : 'Remove mode'}</button>
+      <button class="btn quiet" id="resetAll">Reset all</button>
+      <button class="btn quiet" id="toggleBadges">${document.body.classList.contains('no-badges') ? 'Show' : 'Hide'} badges</button>
+      <div class="share">
+        <input id="shareUrl" readonly value="${esc(location.href)}" aria-label="Build link">
+        <button class="btn" id="copy">Copy link</button>
+      </div>
+      <div class="msg" id="msg"></div>
+    </div>
+    <div class="legend">
+      <span class="mouse-only">Click: add a point</span><span class="mouse-only">Right-click or Shift-click: remove</span>
+      <span class="touch-only">Tap: add a point and show details (− in the popup removes)</span>
+      <span><span class="flag new" style="position:static">NEW</span> new in Forever</span>
+      <span><span class="flag reworked" style="position:static">RW</span> reworked since Classic (hover for the Classic text)</span>
+    </div>
+    <div class="trees">${trees}</div>
+    ${removed}
+    <p class="note">Tree layout, ranks and tooltips come from the Forever beta client's talent data. Numbers marked † scale with your
+      character and are shown for a level-60 character with no gear bonuses; “?” marks text the beta client doesn't have yet.
+      Prerequisites need the required talent maxed. Single spec only; the client's primary/secondary spec tabs and the Legacy trees aren't covered yet.</p>`;
+  wire();
+  if (state.pinned) showTip(state.pinned.id, document.querySelector(`.talent[data-id="${state.pinned.id}"]`), true);
+}
+
+function wire() {
+  document.querySelectorAll('.talent').forEach(el => {
+    const t = byId(Number(el.dataset.id));
+    el.addEventListener('click', e => {
+      e.preventDefault();
+      const remove = e.shiftKey || state.removeMode;
+      change(t, remove ? -1 : 1);
+      if (matchMedia('(hover: none)').matches) showTip(t.id, document.querySelector(`.talent[data-id="${t.id}"]`), true);
+      else showTip(t.id, document.querySelector(`.talent[data-id="${t.id}"]`));
+    });
+    el.addEventListener('contextmenu', e => { e.preventDefault(); change(t, -1); showTip(t.id, document.querySelector(`.talent[data-id="${t.id}"]`)); });
+    el.addEventListener('mouseenter', () => { if (!state.pinned) showTip(t.id, el); });
+    el.addEventListener('mouseleave', () => { if (!state.pinned) hideTip(); });
+    el.addEventListener('focus', () => { if (!state.pinned) showTip(t.id, el); });
+    el.addEventListener('blur', () => { if (!state.pinned) hideTip(); });
+  });
+  document.querySelectorAll('.tree-head .reset').forEach(b => b.addEventListener('click', () => {
+    const tab = Number(b.dataset.tab);
+    d().talents.filter(t => t.tab === tab).forEach(t => delete state.ranks[t.id]);
+    hideTip(); render(); syncUrl();
+  }));
+  document.getElementById('resetAll').addEventListener('click', () => { state.ranks = {}; hideTip(); render(); syncUrl(); });
+  document.getElementById('removeMode').addEventListener('click', () => { state.removeMode = !state.removeMode; render(); });
+  document.getElementById('toggleBadges').addEventListener('click', () => { document.body.classList.toggle('no-badges'); render(); });
+  document.getElementById('copy').addEventListener('click', copyLink);
+}
+
+async function copyLink() {
+  const msg = document.getElementById('msg');
+  const url = location.href;
+  try {
+    await navigator.clipboard.writeText(url);
+    msg.className = 'msg'; msg.textContent = 'Link copied. Anyone who opens it gets this exact build.';
+  } catch {
+    const input = document.getElementById('shareUrl');
+    input.select();
+    msg.className = 'msg'; msg.textContent = 'Press Ctrl+C / ⌘C to copy the selected link.';
+  }
+}
+
+// ── tooltip ──────────────────────────────────────────────────────────────
+const PROV = { scaling: '† Scales with your character: shown for level 60 with no gear bonuses.',
+               missing: '? Part of this text isn\'t in the beta client yet.' };
+function rankText(r) {
+  if (!r || !r.text) return '<p style="color:var(--ink-dim)">Tooltip not in the beta client yet.</p>';
+  return `<p>${esc(r.text)}${r.provisional === 'scaling' ? ' †' : ''}</p>`;
+}
+function tipHtml(t) {
+  const r = rank(t);
+  const tag = t.status === 'new' ? '<span class="tag new">New</span>' : t.status === 'reworked' ? '<span class="tag reworked">Reworked</span>' : '';
+  const cur = r ? t.ranks[r - 1] : t.ranks[0];
+  const next = r && r < t.max_rank ? t.ranks[r] : null;
+  const blockers = addBlockers(t);
+  const provs = new Set([cur, next].filter(Boolean).map(x => x.provisional).filter(Boolean));
+  let html = `<h3>${esc(t.name)}${tag}</h3><div class="rk">Rank ${r}/${t.max_rank}</div>`;
+  if (r < t.max_rank) html += blockers.filter(b => !b.startsWith('All ')).map(b => `<div class="req">${esc(b)}</div>`).join('');
+  html += rankText(cur);
+  if (next) html += `<div class="next">Next rank</div>${rankText(next)}`;
+  html += [...provs].map(p => `<div class="prov">${PROV[p]}</div>`).join('');
+  if (t.classic && t.status === 'reworked') {
+    const cr = t.classic.ranks[Math.min(Math.max(r, 1), t.classic.max_rank) - 1];
+    html += `<div class="classic"><div class="lbl">Classic Era · ${esc(t.classic.name)} · rank ${Math.min(Math.max(r, 1), t.classic.max_rank)}/${t.classic.max_rank}</div>
+      ${cr && cr.text ? `<p>${esc(cr.text)}</p>` : ''}
+      <div class="changes">${t.changes.map(esc).join(' · ')}</div></div>`;
+  } else if (t.changes && t.changes.length) {
+    html += `<div class="changes" style="margin-top:0.45rem">${t.changes.map(esc).join(' · ')}</div>`;
+  }
+  html += `<div class="tip-ctl"><button data-act="-1" aria-label="Remove a point">−</button><button data-act="1" aria-label="Add a point">+</button><button data-act="0" aria-label="Close">✕</button></div>`;
+  return html;
+}
+function showTip(id, anchor, pin = false) {
+  const t = byId(id), tip = document.getElementById('tip');
+  if (!t || !anchor) return;
+  tip.innerHTML = tipHtml(t);
+  tip.hidden = false;
+  tip.classList.toggle('pinned', pin);
+  state.pinned = pin ? { id } : null;
+  if (pin) tip.querySelectorAll('.tip-ctl button').forEach(b => b.addEventListener('click', ev => {
+    ev.stopPropagation();
+    const act = Number(b.dataset.act);
+    if (!act) return hideTip();
+    change(t, act);
+  }));
+  const box = anchor.getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight;
+  let left = box.right + 12, top = box.top;
+  if (left + tw > innerWidth - 8) left = box.left - tw - 12;
+  if (left < 8) { left = Math.max(8, Math.min(innerWidth - tw - 8, box.left + box.width / 2 - tw / 2)); top = box.bottom + 12; }
+  if (top + th > innerHeight - 8) top = Math.max(8, innerHeight - th - 8);
+  tip.style.left = left + 'px'; tip.style.top = top + 'px';
+}
+function hideTip() {
+  const tip = document.getElementById('tip');
+  tip.hidden = true; tip.classList.remove('pinned'); state.pinned = null;
+}
+document.addEventListener('click', e => {
+  if (state.pinned && !e.target.closest('#tip') && !e.target.closest('.talent')) hideTip();
+});
+addEventListener('scroll', () => { if (!state.pinned) hideTip(); }, { passive: true });
+
+// ── classes + boot ───────────────────────────────────────────────────────
+function renderClasses() {
+  document.getElementById('classes').innerHTML = state.classes.map(c =>
+    `<button class="class-btn${d() && d().slug === c.slug ? ' on' : ''}" data-slug="${c.slug}" style="--cc:${CLASS_COLORS[c.slug] || 'var(--gold)'}">
+      ${esc(c.name)}<span class="n">${c.new} new · ${c.reworked} rw</span></button>`).join('');
+  document.querySelectorAll('.class-btn').forEach(b => b.addEventListener('click', () => {
+    if (d() && d().slug === b.dataset.slug) return;
+    history.pushState(null, '', b.dataset.slug);
+    loadFromUrl();
+  }));
+}
+
+function parseUrl() {
+  const m = location.pathname.match(/\/talents\/([a-z]+)(?:\/([0-9-]*))?\/?$/i);
+  return m ? { slug: m[1].toLowerCase(), build: m[2] || '' } : { slug: null, build: '' };
+}
+
+async function loadFromUrl() {
+  const { slug, build } = parseUrl();
+  hideTip();
+  if (!slug) { state.data = null; renderClasses(); document.getElementById('calc').innerHTML = '<div class="empty">Pick a class to start.</div>'; return; }
+  try {
+    state.data = await api('talents/' + slug);
+  } catch (e) {
+    state.data = null; renderClasses();
+    document.getElementById('calc').innerHTML = `<div class="empty">${esc(e.message === 'No such class.' ? `No class called “${slug}”. Pick one above.` : e.message)}</div>`;
+    return;
+  }
+  document.title = `${state.data.name} Talent Calculator — WoW: Forever`;
+  const dropped = decode(build);
+  renderClasses();
+  render();
+  syncUrl();
+  if (dropped > 0) {
+    const msg = document.getElementById('msg');
+    msg.className = 'msg warn';
+    msg.textContent = `${dropped} point${dropped > 1 ? 's' : ''} from this link couldn't be placed (the talent data may have changed since it was made).`;
+  }
+}
+addEventListener('popstate', loadFromUrl);
+let resizeTimer;
+addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => d() && render(), 150); });
+
+(async function boot() {
+  const banner = document.getElementById('banner');
+  try {
+    const m = await api('talents/meta');
+    banner.innerHTML = `<strong>Beta data</strong> — Forever build ${esc(m.forever_build_id)} talent trees, diffed against Classic Era ${esc(m.classic_era_build_id)}. ` +
+      `Talents, ranks and numbers may change before the Nov 4 launch.` +
+      `<span class="meta-line">${m.total} talents in ${m.trees} trees · ${m.new} new · ${m.reworked} reworked · ${m.unchanged} unchanged · ${m.removed} Classic talents removed</span>`;
+  } catch (e) {
+    banner.innerHTML = '<strong>Beta data</strong> — build info unavailable right now (has the ingest run yet?).';
+  }
+  try {
+    state.classes = await api('talents/classes');
+  } catch (e) {
+    document.getElementById('calc').innerHTML = `<div class="empty">Talent data unavailable: ${esc(e.message)}</div>`;
+    return;
+  }
+  await loadFromUrl();
+})();
+</script>
+</body>
+</html>
