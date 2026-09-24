@@ -728,3 +728,105 @@ def zone_map_image(name: str) -> FileResponse:
         raise HTTPException(status_code=404, detail="No map for that zone.")
     return FileResponse(MAPS_DIR / f"{ui_map}.png", media_type="image/png",
                         headers={"Cache-Control": "public, max-age=2592000"})
+
+
+# ── Talent Calculator (sub-tool #3) ─────────────────────────────────────────
+# Data: ingest/talents.py (Forever's Trait tables, diffed against Era's
+# Talent table). One JSON blob per class, served as-is. Builds are encoded in
+# the page URL (talents/<class>/<build>) by the frontend; nothing is stored.
+
+
+@app.get("/talents")
+async def talents_redirect() -> RedirectResponse:
+    return RedirectResponse(url="talents/")
+
+
+@app.get("/talents/")
+@app.get("/talents/{class_slug}")
+@app.get("/talents/{class_slug}/{build}")
+async def talents_index(class_slug: str | None = None, build: str | None = None) -> FileResponse:
+    """The calculator page; it reads class + build from its own URL."""
+    return FileResponse(STATIC_DIR / "talents" / "index.html")
+
+
+def _talent_conn():
+    try:
+        return db.get_conn()
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from None
+
+
+@app.get("/api/talents/classes")
+def talent_classes() -> list[dict]:
+    try:
+        with _talent_conn() as conn:
+            rows = conn.execute("SELECT slug, class_id, name, data_json FROM talent_classes ORDER BY name").fetchall()
+    except sqlite3.OperationalError:
+        raise HTTPException(status_code=503, detail="Talent data missing — re-run the ingest.") from None
+    out = []
+    for r in rows:
+        data = json.loads(r["data_json"])
+        statuses = [t["status"] for t in data["talents"]]
+        out.append({"slug": r["slug"], "id": r["class_id"], "name": r["name"],
+                    "trees": [{"name": t["name"], "icon": t["icon"]} for t in data["trees"]],
+                    "talents": len(statuses), "new": statuses.count("new"), "reworked": statuses.count("reworked")})
+    return out
+
+
+@app.get("/api/talents/meta")
+def talent_meta() -> dict:
+    with _talent_conn() as conn:
+        m = db.read_meta(conn)
+    n = lambda key: int(m.get(f"talents_{key}", 0))  # noqa: E731
+    return {
+        "forever_build": m.get("forever_build"), "forever_build_id": m.get("forever_build_id"),
+        "classic_era_build": m.get("classic_era_build"), "classic_era_build_id": m.get("classic_era_build_id"),
+        "refreshed_at": m.get("refreshed_at"),
+        "classes": n("classes"), "trees": n("trees"), "total": n("count"), "new": n("new"),
+        "reworked": n("reworked"), "unchanged": n("unchanged"), "removed": n("removed"),
+        "provisional_scaling": n("provisional_scaling"), "provisional_missing": n("provisional_missing"),
+        "problems": n("problems"),
+    }
+
+
+@app.get("/api/talents/{class_slug}")
+def talent_class(class_slug: str) -> JSONResponse:
+    try:
+        with _talent_conn() as conn:
+            row = conn.execute("SELECT data_json FROM talent_classes WHERE slug = ?",
+                               (class_slug.lower(),)).fetchone()
+    except sqlite3.OperationalError:
+        raise HTTPException(status_code=503, detail="Talent data missing — re-run the ingest.") from None
+    if row is None:
+        raise HTTPException(status_code=404, detail="No such class.")
+    return JSONResponse(content=json.loads(row["data_json"]))
+
+
+_forever_build_cache: dict = {"mtime": None, "build": None}
+
+
+def _forever_build() -> str | None:
+    """Current Forever build (for on-demand icon fetches), re-read when the DB changes."""
+    try:
+        mtime = db.DB_PATH.stat().st_mtime
+    except FileNotFoundError:
+        return None
+    if _forever_build_cache["mtime"] != mtime:
+        with db.get_conn() as conn:
+            _forever_build_cache.update(mtime=mtime, build=db.read_meta(conn).get("forever_build"))
+    return _forever_build_cache["build"]
+
+
+@app.get("/api/fileicon/{name}")
+def file_icon(name: str) -> FileResponse:
+    """Talent/tree icon by client FileDataID (/api/fileicon/<fdid>.jpg).
+    Warmed by the ingest; a cold miss fetches from wago.tools once."""
+    fdid = name.removesuffix(".jpg")
+    if not fdid.isdigit():
+        raise HTTPException(status_code=404, detail="Not found.")
+    path = icons.get_file_icon(int(fdid), _forever_build())
+    if path is None:
+        return FileResponse(PLACEHOLDER_ICON, media_type="image/svg+xml",
+                            headers={"Cache-Control": "public, max-age=3600"})
+    return FileResponse(path, media_type="image/jpeg",
+                        headers={"Cache-Control": "public, max-age=31536000, immutable"})
