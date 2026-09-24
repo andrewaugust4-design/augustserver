@@ -2,8 +2,9 @@
 
 A FastAPI app for augustserver.com's WoW: Forever section — datamined tools
 for Blizzard's new Classic+ branch (beta since 2026-09-12, launching
-2026-11-04). Ships with one sub-tool, the **Gear Browser**; more WoW tools
-slot into the same app/DB later (see "Adding another sub-tool" below).
+2026-11-04). Sub-tools so far: the **Gear Browser**, **Quest Browser** and
+**Talent Calculator**; more WoW tools slot into the same app/DB later
+(see "Adding another sub-tool" below).
 
 Deploys to `/opt/wow`, port 8065, proxied at `/wow/` — see the root repo's
 `CLAUDE.md` for the site-wide conventions this follows.
@@ -463,6 +464,122 @@ python -m ingest.maps           # one-time; re-run to pick up a new Era build
 
 - `app/static/quests/quests.js` holds the rendering helpers (rewards,
   objectives, icons, `api()`) that the browser and the guide page share.
+
+## Talent Calculator (sub-tool #3, `/wow/talents/`)
+
+A classic three-tree, 51-point calculator for Forever's talents. Pick a class,
+then click a talent to add a point. Right-click or Shift-click removes one. On
+touch screens, tapping adds a point and opens a popup with −/+ buttons, and
+there's also a Remove mode. The page enforces the rules as you click:
+
+- **51 points in total** (one per level from 10 to 60, so the page shows
+  "Requires level 9 + points").
+- **5 points per row, per tree.** Row N opens at 5 × N points spent in that
+  tree.
+- **Prerequisites must be maxed** (the classic rule; see below).
+- **Removals can't break the build.** A point can't come off if a dependent
+  talent still has points, or if a deeper row would drop below its gate.
+
+Talents that are partly filled or can take a point glow green, maxed ones glow
+gold, and locked ones are greyed out. Prereq arrows light up once the parent
+is maxed. Talents new in Forever get a **NEW** badge, and reworked ones get
+**RW**. Hovering a reworked talent shows its Classic Era text and what
+changed. A "Removed from Classic" list under the trees shows Era talents with
+no Forever counterpart.
+
+API: `/api/talents/classes`, `/api/talents/meta` and `/api/talents/<class>`
+(the full tree: positions, ranks, prereqs, icons, per-rank tooltips, change
+flags). Data is built by `ingest/talents.py`, whose docstring has the details.
+
+**Where the data comes from** (checked 2026-09-24 on 1.60.1.69977):
+- **Not the `Talent` table.** Forever still ships `Talent`/`TalentTab`, but
+  it's an untouched copy of Era's (same 432 rows; 840 of its rank spells no
+  longer exist in Forever).
+- **The live trees are the modern Trait tables.** Each class has one
+  `TraitTree` (found via `SkillLineXTraitTree` + `SkillRaceClassInfo`), paid
+  for with a currency whose `SourcedMax` is 51. The three specs are three X
+  bands of that tree on a 600-unit grid, named by `TalentTab`.
+- **Row gates** come from `TraitCond.SpentAmountRequired`, which is 5 × row
+  in every tree.
+- **Prerequisites** come from `TraitEdge` types 2 and 3. Where an edge is
+  listed both ways, the parent is the talent in the earlier row. The client
+  doesn't encode how many points the parent needs, so the calculator assumes
+  maxed, as in classic. That's still to be confirmed in game.
+- **Per-rank numbers** come from `TraitDefinitionEffectPoints` → `Curve`
+  (rank → value). Each rank's tooltip is the spell description rendered with
+  that rank's values.
+- **Every ingest checks all 27 trees:**
+  - 7 rows and 4 columns, with no two talents in the same cell.
+  - Every gate is 5 × row.
+  - No talent has 4 ranks.
+  - Every talent has an icon.
+  - Each tree has a 1-point milestone at **11, 16, 21 and 31 points**. The
+    16-point one is Forever's addition (e.g. Hot Streak, Missile Barrage,
+    Ice Block for Mage).
+
+  Failures are logged and counted in `meta.talents_problems` (0 today).
+- **Client data quirks** handled at ingest (logged each run):
+  - Three nodes have an extra digit in their position (y=39300 for 3930).
+    Improved Serpent Sting is moved back onto the grid.
+  - Stray off-grid copies of Lightning Reflexes and Holy Specialization are
+    dropped in favour of their properly placed twins.
+  - 14 nodes carry node flag 8, which retail's enum calls TestGridPositioned
+    (a layout-editor hint). The live Legacy trees carry the same flag, and
+    these nodes sit in empty cells inside the normal row-gate groups, so
+    they're kept as real talents.
+
+**Diff vs Classic Era** (Era's `Talent` table, one spell per rank). Each
+Forever talent is matched to an Era talent by spell id (Forever's talent
+spell is usually Era's rank-1 spell), then by name within the class.
+- **New:** no Era match.
+- **Reworked:** renamed, different max rank, or any rank's tooltip differs.
+  Case, spacing and "1.0" vs "1" are ignored.
+- **Unchanged:** everything else.
+
+Moving to a different row, column or tree is listed in the change notes but
+doesn't make a talent "reworked" on its own. Counts today: 469 talents, 113
+new, 274 reworked, 82 unchanged, 76 Era talents removed.
+
+**Provisional values:**
+- **Scaling numbers** (tooltips with attack power, spell power or bonus
+  healing) are evaluated for a level-60 character with no gear bonuses and
+  marked † (Summon Hawk's 32 damage, Prayer of Mending's 172 healing).
+- **Text the client doesn't have yet**, usually another spell's duration,
+  shows as "?" and is noted in the tooltip (3 talents today).
+- **BlizzCon-demo text isn't used.** There's no machine-readable source for
+  it, and every talent has client text today. A rank whose text is missing
+  outright shows "Tooltip not in the beta client yet".
+
+**Icons.** Talent and tree icons resolve from the datamine:
+`SpellMisc.SpellIconFileDataID` gives the icon's client file, which is fetched
+from wago.tools' file endpoint (the same one `ingest/maps.py` uses) and
+converted from BLP to JPEG. They're cached in `data/icons/file/<fdid>.jpg` and
+served at `/api/fileicon/<fdid>.jpg`. No Blizzard API keys are needed.
+- Every ingest warms the cache (371 icons, all found). Cached files are
+  skipped, so after the first run this takes about a second.
+- A cold miss in the app fetches the icon once. A 404 falls back to the
+  placeholder and isn't retried for 24h (the `missing_file` table in
+  `icons/missing.db`).
+
+**Sharing is stateless.** The build lives in the URL:
+`/wow/talents/<class>/<build>`. `<build>` is one rank digit per talent in
+(row, column) order, per tree, with trailing zeros trimmed and trees joined by
+`-`, for example `mage/2221111-2255233311111111-22211`. The page updates the
+URL on every click, "Copy link" copies it, and nothing is stored. Loading a
+link replays the string through the rules, so a link from older talent data
+(if Blizzard adds or moves talents, digit positions shift) or a hand-edited
+one still gives a legal build, plus a warning saying how many points couldn't
+be placed. Short vanity ids (via `sets.db`) were optional and aren't built;
+the URL is the share mechanism.
+
+**Scope, for now:**
+- **Single spec only.** The client's Primary/Secondary (dual-spec-style) tabs
+  aren't defined in the data yet.
+- **Legacy trees are a separate system**: TraitTrees 1187–1189, with their
+  own 16-point "Legacy Point" currency. They're a future sub-tool, not part of
+  this one.
+- **All of this is provisional beta data**, including talent layout, ranks
+  and numbers. The banner shows the build ids and counts.
 
 ## Refreshing the data
 
