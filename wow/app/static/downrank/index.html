@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script>document.write('<base href="' + location.pathname.replace(/downrank(\/.*)?$/, '') + 'downrank/">');</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Downrank Calculator — WoW: Forever</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #1b160e;
+    --panel: #251e12;
+    --panel-edge: #3d331d;
+    --ink: #f0e6d2;
+    --ink-dim: #a89878;
+    --gold: #e0a82e;
+    --gold-dim: #8a6b1f;
+    --alert: #e2604c;
+    --ok: #8fc79a;
+    --new: #34d399;
+    --changed: #6aa5ff;
+    --heal: #8fc79a;
+    --damage: #f08a5d;
+    --absorb: #b9a4ff;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+    --sans: "Space Grotesk", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--sans); min-height: 100vh; padding: 2rem 1.25rem 4rem; }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  .back-links { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+  .back-link {
+    display: inline-flex; align-items: center; gap: 0.45rem;
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink-dim); text-decoration: none;
+    border: 1px solid var(--panel-edge); border-radius: 6px;
+    padding: 0.45rem 0.85rem; transition: color 0.15s, border-color 0.15s;
+  }
+  .back-link:hover { color: var(--gold); border-color: var(--gold); }
+  h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 700; letter-spacing: -0.01em; margin-bottom: 0.9rem; }
+  h1 .accent { color: var(--gold); }
+  .banner {
+    background: rgba(224, 168, 46, 0.08); border: 1px solid rgba(224, 168, 46, 0.35); border-radius: 10px;
+    padding: 0.75rem 1rem; margin-bottom: 1rem; font-size: 0.78rem; line-height: 1.55;
+  }
+  .banner strong { color: var(--gold); }
+  .banner .meta-line { display: block; margin-top: 0.3rem; font-family: var(--mono); font-size: 0.68rem; color: var(--ink-dim); }
+  .caveat { font-size: 0.76rem; color: var(--ink-dim); line-height: 1.55; margin-bottom: 1.2rem; }
+  .caveat strong { color: var(--ink); font-weight: 500; }
+
+  .classes { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-bottom: 1rem; }
+  .class-btn {
+    font-family: var(--sans); font-size: 0.85rem; font-weight: 500; cursor: pointer;
+    padding: 0.45rem 0.8rem; border-radius: 8px; background: var(--panel);
+    border: 1px solid var(--panel-edge); color: var(--cc, var(--ink));
+  }
+  .class-btn:hover { border-color: var(--cc); }
+  .class-btn.on { background: color-mix(in srgb, var(--cc) 16%, var(--panel)); border-color: var(--cc); }
+  .class-btn .n { font-family: var(--mono); font-size: 0.62rem; color: var(--ink-dim); margin-left: 0.3rem; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 0.8rem 1.2rem; align-items: flex-end; margin-bottom: 1.2rem;
+    background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 10px; padding: 0.8rem 0.95rem; }
+  .field { display: flex; flex-direction: column; gap: 0.3rem; }
+  .field label, .field .lbl { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); }
+  select, input[type=number] {
+    font-family: var(--sans); font-size: 0.9rem; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--panel-edge); border-radius: 8px; padding: 0.45rem 0.6rem;
+  }
+  input#sp { width: 7.5rem; font-family: var(--mono); font-size: 1.05rem; color: var(--gold); }
+  input[type=range] { width: 11rem; accent-color: var(--gold); }
+  .seg { display: inline-flex; border: 1px solid var(--panel-edge); border-radius: 8px; overflow: hidden; }
+  .seg button { font-family: var(--mono); font-size: 0.7rem; padding: 0.45rem 0.65rem; background: var(--bg); color: var(--ink-dim); border: none; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--panel-edge); }
+  .seg button.on { background: rgba(224,168,46,0.14); color: var(--gold); }
+  .check { display: flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--ink-dim); padding-bottom: 0.45rem; }
+  .copy { margin-left: auto; }
+  .btn {
+    font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 0.5rem 0.8rem; border-radius: 8px; cursor: pointer;
+    background: rgba(224,168,46,0.12); border: 1px solid var(--gold-dim); color: var(--gold);
+  }
+  .btn:hover { border-color: var(--gold); }
+  .msg { font-size: 0.72rem; color: var(--ok); }
+
+  .spells { display: grid; gap: 1rem; }
+  .spell { background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 12px; padding: 0.85rem 1rem 0.7rem; }
+  .spell-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.7rem; margin-bottom: 0.55rem; }
+  .spell-head h2 { font-size: 1.02rem; }
+  .role { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.08em; text-transform: uppercase; }
+  .role.heal { color: var(--heal); } .role.damage { color: var(--damage); } .role.absorb { color: var(--absorb); }
+  .school { font-family: var(--mono); font-size: 0.66rem; color: var(--ink-dim); }
+  .badge { font-family: var(--mono); font-size: 0.58rem; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.1rem 0.45rem; border-radius: 999px; border: 1px solid; }
+  .badge.new { color: var(--new); }
+  .badge.changed { color: var(--changed); }
+  .spell-note { font-size: 0.72rem; color: var(--ink-dim); margin: -0.2rem 0 0.5rem; line-height: 1.5; }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.8rem; min-width: 640px; }
+  th {
+    text-align: right; font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ink-dim); font-weight: 500; padding: 0.35rem 0.45rem; border-bottom: 1px solid var(--panel-edge); white-space: nowrap;
+  }
+  th:first-child, td:first-child { text-align: left; }
+  td { padding: 0.36rem 0.45rem; border-bottom: 1px solid rgba(255,255,255,0.04); text-align: right; font-family: var(--mono); white-space: nowrap; }
+  tr.best td { background: rgba(224,168,46,0.12); }
+  tr.best td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
+  tr.best .eff-mana { color: var(--gold); font-weight: 500; }
+  .star { color: var(--gold); margin-left: 0.25rem; }
+  td .sub { color: var(--ink-dim); font-size: 0.68rem; }
+  .mark { color: var(--gold); cursor: help; }
+  .chg { color: var(--changed); cursor: help; }
+  .bar { display: inline-block; height: 5px; border-radius: 3px; background: var(--gold-dim); vertical-align: middle; margin-left: 0.4rem; }
+  tr.best .bar { background: var(--gold); }
+  .empty { font-size: 0.85rem; color: var(--ink-dim); padding: 1rem 0; }
+  .note { font-size: 0.74rem; color: var(--ink-dim); line-height: 1.6; margin-top: 1.2rem; }
+  .note code { font-family: var(--mono); font-size: 0.7rem; }
+  @media (max-width: 600px) { body { padding: 1.5rem 0.9rem 3rem; } .copy { margin-left: 0; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="back-links">
+    <a class="back-link" href="../">‹ WoW: Forever</a>
+    <a class="back-link" href="/">‹ Back to August.</a>
+  </div>
+  <h1>Downrank <span class="accent">Calculator</span></h1>
+  <div class="banner" id="banner">Loading build info…</div>
+  <p class="caveat"><strong>Base spells, unbuffed, no talents.</strong> Talents that change coefficients, costs or cast times aren't modelled,
+    and neither are crits. Forever merged bonus healing and bonus damage into a single spell power stat, so one number is enough. Gear that
+    only boosts one school (“+fire damage”) counts only for that school's spells, so enter the spell power that applies to the spell you're
+    looking at. All values are beta data and change from build to build.</p>
+
+  <div class="classes" id="classes"></div>
+  <div id="calc"><div class="empty">Pick a class to start.</div></div>
+</div>
+
+<script>
+const CLASS_COLORS = { druid: '#ff7c0a', mage: '#3fc7eb', paladin: '#f48cba', priest: '#ffffff',
+  shaman: '#2d8cf0', warlock: '#8788ee' };
+const opts = { sp: 300, level: 'spell', sub20: false, role: 'all', spell: '' };
+const state = { classes: [], data: null };
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+async function api(path) {
+  const res = await fetch('../api/' + path);
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+  return res.json();
+}
+const fmt = (n, d = 0) => Number.isFinite(n) ? n.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d }) : '—';
+const secs = ms => `${fmt(ms / 1000, ms % 1000 ? 1 : 0)}s`;
+
+// ── the maths ────────────────────────────────────────────────────────────
+// Sub-level-20 penalty (classic): 3.75% per level below 20. Forever's client
+// coefficients don't include it, so it's an opt-in overlay here.
+const sub20 = lvl => lvl < 20 ? 1 - 0.0375 * (20 - lvl) : 1;
+
+function coefOf(c, rank) {
+  const pen = opts.sub20 && c.coef_source === 'client' ? sub20(rank.level) : 1;
+  return c.coef * pen;
+}
+function baseOf(c) {
+  return opts.level === '60' ? [c.min60, c.max60] : [c.min, c.max];
+}
+function rankValues(spell, rank) {
+  const mine = rank.components.filter(c => c.role === spell.role);
+  const other = rank.components.filter(c => c.role !== spell.role && c.coef > 0);
+  const sum = cs => cs.reduce((acc, c) => {
+    const [lo, hi] = baseOf(c);
+    acc.base += (lo + hi) / 2; acc.lo += lo; acc.hi += hi;
+    acc.coef += coefOf(c, rank);
+    return acc;
+  }, { base: 0, lo: 0, hi: 0, coef: 0 });
+  const m = sum(mine), o = sum(other);
+  const effective = m.base + opts.sp * m.coef;
+  // Throughput: time the cast occupies (cast time, channel length, or the 1.5s GCD).
+  const busy = Math.max(rank.channeled ? rank.duration : rank.cast, 1500) / 1000;
+  return {
+    ...m, effective, other: other.length ? o.base + opts.sp * o.coef : null,
+    perMana: rank.mana ? effective / rank.mana : null, perSec: effective / busy,
+    penalized: opts.sub20 && rank.level < 20 && mine.some(c => c.coef_source === 'client'),
+    measured: mine.find(c => c.coef_source === 'measured'),
+    periodic: mine.some(c => c.kind === 'periodic'), ticks: Math.max(...mine.map(c => c.ticks), 1),
+    provisional: opts.level === '60' && mine.some(c => c.scales_with_level),
+  };
+}
+
+// ── rendering ────────────────────────────────────────────────────────────
+function castLabel(r) {
+  if (r.channeled) return `${secs(r.duration)} ch.`;
+  return r.cast ? secs(r.cast) : 'Instant';
+}
+
+function spellCard(spell) {
+  const rows = spell.ranks.map(r => ({ r, v: rankValues(spell, r) }));
+  const withMana = rows.filter(x => x.v.perMana != null);
+  const best = withMana.length ? withMana.reduce((a, b) => (b.v.perMana > a.v.perMana ? b : a)) : null;
+  const maxPer = Math.max(...withMana.map(x => x.v.perMana), 0);
+  const unit = spell.role === 'heal' ? 'heal' : spell.role === 'absorb' ? 'absorb' : 'dmg';
+  const badge = spell.status === 'new' ? '<span class="badge new">New in Forever</span>'
+    : spell.status === 'changed' ? '<span class="badge changed" title="Hover a ▲ in the table for what changed">Changed from Classic</span>' : '';
+  const notes = [];
+  if (spell.hybrid) notes.push(`Also ${spell.role === 'heal' ? 'deals damage' : 'heals'} on the same cast (shown under “also”); both parts use their own coefficient.`);
+  if (rows.some(x => x.v.measured)) notes.push(`‡ Coefficient isn't in the client (server-side); ${esc(rows.find(x => x.v.measured).v.measured.special_note)}.`);
+  if (rows.some(x => x.v.periodic)) notes.push('Over-time values and coefficients are totals for the full duration.');
+  if (rows.some(x => x.r.mana_pct)) notes.push(`Mana is a % of base mana, converted at level 60 (${fmt(state.data.base_mana_60)} base mana).`);
+  const rowsHtml = rows.map(({ r, v }) => {
+    const isBest = best && best.r === r;
+    const coefTxt = `${fmt(v.coef * 100, 1)}%${v.measured ? ' <span class="mark" title="Classic-measured, server-side">‡</span>' : ''}${v.penalized ? ' <span class="mark" title="Classic sub-20 penalty applied">↓</span>' : ''}`;
+    const baseTxt = Math.round(v.lo) === Math.round(v.hi) ? fmt(v.lo) : `${fmt(v.lo)}–${fmt(v.hi)}`;
+    const chg = r.changes.length ? ` <span class="chg" title="${esc('vs Classic Era: ' + r.changes.join('; '))}">▲</span>` : '';
+    const bar = v.perMana != null && maxPer ? `<span class="bar" style="width:${Math.round(40 * v.perMana / maxPer)}px"></span>` : '';
+    return `<tr class="${isBest ? 'best' : ''}">
+      <td>${r.rank}${isBest ? '<span class="star" title="Most ' + unit + ' per mana at this spell power">★</span>' : ''}${chg}</td>
+      <td>${r.level}</td>
+      <td>${r.mana ? fmt(r.mana) : '—'}${r.mana_pct ? ' <span class="sub">(' + fmt(r.mana_pct, 1) + '%)</span>' : ''}</td>
+      <td>${castLabel(r)}${!r.channeled && v.periodic && r.duration ? ' <span class="sub">/ ' + secs(r.duration) + '</span>' : ''}</td>
+      <td>${baseTxt}${v.provisional ? ' <span class="mark" title="Scales with level: shown at level 60 (provisional)">†</span>' : ''}</td>
+      <td>${coefTxt}</td>
+      <td>${fmt(v.effective)}${v.other != null ? ` <span class="sub">also ${fmt(v.other)}</span>` : ''}</td>
+      <td class="eff-mana">${v.perMana != null ? fmt(v.perMana, 2) : '—'}${bar}</td>
+      <td>${fmt(v.perSec, 1)}</td>
+    </tr>`;
+  }).join('');
+  return `<section class="spell">
+    <div class="spell-head"><h2>${esc(spell.name)}</h2>
+      <span class="role ${spell.role}">${spell.role}</span><span class="school">${esc(spell.school)}</span>${badge}</div>
+    ${notes.length ? `<p class="spell-note">${notes.join(' ')}</p>` : ''}
+    <div class="scroll"><table>
+      <thead><tr><th>Rank</th><th>Lvl</th><th>Mana</th><th>Cast</th><th>Base ${unit}</th><th>Coef.</th>
+        <th>Effective</th><th>${unit} / mana</th><th>${unit} / sec</th></tr></thead>
+      <tbody>${rowsHtml}</tbody></table></div>
+  </section>`;
+}
+
+function visibleSpells() {
+  return state.data.spells.filter(s => (opts.role === 'all' || s.role === opts.role) && (!opts.spell || s.name === opts.spell));
+}
+
+function renderSpells() {
+  const list = visibleSpells();
+  document.getElementById('spells').innerHTML = list.length ? list.map(spellCard).join('')
+    : '<div class="empty">No spells match these filters.</div>';
+}
+
+function render() {
+  const d = state.data;
+  const roles = [...new Set(d.spells.map(s => s.role))];
+  document.getElementById('calc').innerHTML = `
+    <div class="controls">
+      <div class="field"><label for="sp">Spell power</label>
+        <input id="sp" type="number" min="0" max="2000" step="1" value="${opts.sp}" inputmode="numeric"></div>
+      <div class="field"><span class="lbl">&nbsp;</span><input id="spRange" type="range" min="0" max="1200" step="5" value="${Math.min(opts.sp, 1200)}" aria-label="Spell power slider"></div>
+      <div class="field"><span class="lbl">Base values at</span>
+        <div class="seg" id="levelSeg"><button data-v="spell" class="${opts.level === 'spell' ? 'on' : ''}">Spell's level</button><button data-v="60" class="${opts.level === '60' ? 'on' : ''}">Level 60 †</button></div></div>
+      <div class="field"><label for="role">Show</label>
+        <select id="role"><option value="all">All spells</option>${roles.map(r => `<option value="${r}"${opts.role === r ? ' selected' : ''}>${r === 'heal' ? 'Heals' : r === 'damage' ? 'Damage' : 'Absorbs'}</option>`).join('')}</select></div>
+      <div class="field"><label for="spell">Spell</label>
+        <select id="spell"><option value="">Every spell</option>${d.spells.map(s => `<option${opts.spell === s.name ? ' selected' : ''}>${esc(s.name)}</option>`).join('')}</select></div>
+      <label class="check" title="Classic reduced the coefficient of ranks below level 20 by 3.75% per level. Forever's client values don't include it; tick to see the classic numbers."><input type="checkbox" id="sub20"${opts.sub20 ? ' checked' : ''}> Classic sub-20 penalty ↓</label>
+      <div class="field copy"><span class="lbl">&nbsp;</span><button class="btn" id="copy">Copy link</button></div>
+      <div class="msg" id="msg"></div>
+    </div>
+    <div class="spells" id="spells"></div>
+    <p class="note">★ marks the most efficient rank (${'most per mana'}) at the spell power you entered; it moves to lower ranks as spell power rises, because every rank gets the same share of spell power.
+      Effective = average base + spell power × coefficient. “/ sec” uses the cast time, channel length or the 1.5s global cooldown, whichever is longer.
+      ▲ = changed from Classic Era (hover for what changed). † = scales with character level, shown at 60 (provisional). ‡ = Classic-measured coefficient, not in the client.
+      Coefficients come from the Forever beta client (${state.meta ? `${state.meta.formula_match} of ${state.meta.formula_checked} match the classic formulas` : 'checked against the classic formulas'}).</p>`;
+  renderSpells();
+  wire();
+}
+
+function syncUrl() {
+  const p = new URLSearchParams();
+  p.set('sp', opts.sp);
+  if (opts.level === '60') p.set('lvl', '60');
+  if (opts.sub20) p.set('sub20', '1');
+  if (opts.role !== 'all') p.set('show', opts.role);
+  if (opts.spell) p.set('spell', opts.spell);
+  history.replaceState(null, '', new URL(`${state.data.slug}?${p}`, document.baseURI).href);
+}
+
+function wire() {
+  const sp = document.getElementById('sp'), range = document.getElementById('spRange');
+  const setSp = v => { opts.sp = Math.max(0, Math.min(5000, Math.round(Number(v) || 0))); renderSpells(); syncUrl(); };
+  sp.addEventListener('input', () => { range.value = Math.min(Number(sp.value) || 0, 1200); setSp(sp.value); });
+  range.addEventListener('input', () => { sp.value = range.value; setSp(range.value); });
+  document.querySelectorAll('#levelSeg button').forEach(b => b.addEventListener('click', () => { opts.level = b.dataset.v; render(); syncUrl(); }));
+  document.getElementById('role').addEventListener('change', e => { opts.role = e.target.value; renderSpells(); syncUrl(); });
+  document.getElementById('spell').addEventListener('change', e => { opts.spell = e.target.value; renderSpells(); syncUrl(); });
+  document.getElementById('sub20').addEventListener('change', e => { opts.sub20 = e.target.checked; renderSpells(); syncUrl(); });
+  document.getElementById('copy').addEventListener('click', async () => {
+    const msg = document.getElementById('msg');
+    try { await navigator.clipboard.writeText(location.href); msg.textContent = 'Link copied: it opens this class at this spell power.'; }
+    catch { msg.textContent = location.href; }
+  });
+}
+
+function renderClasses() {
+  document.getElementById('classes').innerHTML = state.classes.map(c =>
+    `<button class="class-btn${state.data && state.data.slug === c.slug ? ' on' : ''}" data-slug="${c.slug}" style="--cc:${CLASS_COLORS[c.slug] || 'var(--gold)'}">
+      ${esc(c.name)}<span class="n">${c.spells} spells</span></button>`).join('');
+  document.querySelectorAll('.class-btn').forEach(b => b.addEventListener('click', () => {
+    if (state.data && state.data.slug === b.dataset.slug) return;
+    opts.spell = '';
+    history.pushState(null, '', new URL(`${b.dataset.slug}?sp=${opts.sp}`, document.baseURI).href);
+    loadFromUrl();
+  }));
+}
+
+async function loadFromUrl() {
+  const m = location.pathname.match(/\/downrank\/([a-z]+)\/?$/i);
+  const q = new URLSearchParams(location.search);
+  if (q.has('sp')) opts.sp = Math.max(0, Math.min(5000, Math.round(Number(q.get('sp')) || 0)));
+  opts.level = q.get('lvl') === '60' ? '60' : 'spell';
+  opts.sub20 = q.get('sub20') === '1';
+  opts.role = ['heal', 'damage', 'absorb'].includes(q.get('show')) ? q.get('show') : 'all';
+  opts.spell = q.get('spell') || '';
+  if (!m) { state.data = null; renderClasses(); document.getElementById('calc').innerHTML = '<div class="empty">Pick a class to start.</div>'; return; }
+  try {
+    state.data = await api('downrank/' + m[1].toLowerCase());
+  } catch (e) {
+    state.data = null; renderClasses();
+    document.getElementById('calc').innerHTML = `<div class="empty">${esc(e.message)} Pick a caster class above.</div>`;
+    return;
+  }
+  if (opts.spell && !state.data.spells.some(s => s.name === opts.spell)) opts.spell = '';
+  document.title = `${state.data.name} Downrank Calculator — WoW: Forever`;
+  renderClasses();
+  render();
+  syncUrl();
+}
+addEventListener('popstate', loadFromUrl);
+
+(async function boot() {
+  const banner = document.getElementById('banner');
+  try {
+    const m = state.meta = await api('downrank/meta');
+    banner.innerHTML = `<strong>Beta data</strong> — spell ranks from Forever build ${esc(m.forever_build_id)}, compared with Classic Era ${esc(m.classic_era_build_id)}. ` +
+      `Base values, costs and coefficients may change before the Nov 4 launch.` +
+      `<span class="meta-line">${m.spells} spells · ${m.ranks} ranks · ${m.changed} changed from Classic · ${m.new} new · coefficients from the client (${m.coef_measured} ranks use a Classic-measured value)</span>`;
+  } catch (e) {
+    banner.innerHTML = '<strong>Beta data</strong> — build info unavailable right now (has the ingest run yet?).';
+  }
+  try {
+    state.classes = await api('downrank/classes');
+  } catch (e) {
+    document.getElementById('calc').innerHTML = `<div class="empty">Spell data unavailable: ${esc(e.message)}</div>`;
+    return;
+  }
+  renderClasses();
+  await loadFromUrl();
+})();
+</script>
+</body>
+</html>

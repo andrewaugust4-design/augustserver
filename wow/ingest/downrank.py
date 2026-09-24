@@ -5,8 +5,9 @@ diff against Classic Era.
 Sources (checked 2026-09-24, Forever 1.60.1.69977 vs Era 1.15.9.69722):
 
 - **Which spells.** `SkillLineAbility` rows on a class skill line (SkillLine
-  category 7, one class per `SkillRaceClassInfo`) with AcquireMethod 0, i.e.
-  the trainer spells. AcquireMethod 3 is a second copy of several rank chains
+  category 7, one class per `SkillRaceClassInfo`) with AcquireMethod 0
+  (trainer) or 2 (known at creation: Smite, Fireball, Holy Light… rank 1).
+  AcquireMethod 3 is a second copy of several rank chains
   (Renew 425268…, the Season of Discovery versions), which are skipped. Mana
   spells only (`SpellPower.PowerType` 0). Ranks are grouped by class + spell
   name and ordered by `Spell.NameSubtext_lang` ("Rank N").
@@ -72,7 +73,7 @@ ERA_TABLES = ("SkillLineAbility", "SpellPower", "SpellCastTimes", "SpellLevels",
               "SpellEffect", "Spell", "SpellName")
 
 CLASS_SKILL_CATEGORY = "7"
-TRAINER = "0"
+TRAINER = {"0", "2"}  # 0 = trainer, 2 = known at character creation (every class's rank-1 starters)
 POWER_MANA = "0"
 REF_LEVEL = 60
 
@@ -293,7 +294,7 @@ def _class_spells(forever_dir: Path) -> dict[int, list[int]]:
     for r in read_csv(forever_dir / "SkillLineAbility.csv"):
         cls = skill_class.get(_i(r["SkillLine"]))
         sid = _i(r["Spell"])
-        if cls and r["AcquireMethod"] == TRAINER and (cls, sid) not in seen:
+        if cls and r["AcquireMethod"] in TRAINER and (cls, sid) not in seen:
             seen.add((cls, sid))
             out[cls].append(sid)
     return out
