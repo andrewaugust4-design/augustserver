@@ -830,3 +830,65 @@ def file_icon(name: str) -> FileResponse:
                             headers={"Cache-Control": "public, max-age=3600"})
     return FileResponse(path, media_type="image/jpeg",
                         headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+# ── Downrank Calculator (sub-tool #4) ───────────────────────────────────────
+# Data: ingest/downrank.py (per-rank base values, mana, cast/duration and
+# spell-power coefficients). Effective value and efficiency are computed in
+# the page from the spell power the visitor enters.
+
+
+@app.get("/downrank")
+async def downrank_redirect() -> RedirectResponse:
+    return RedirectResponse(url="downrank/")
+
+
+@app.get("/downrank/")
+@app.get("/downrank/{class_slug}")
+async def downrank_index(class_slug: str | None = None) -> FileResponse:
+    """The calculator page; it reads the class (and ?sp=) from its own URL."""
+    return FileResponse(STATIC_DIR / "downrank" / "index.html")
+
+
+@app.get("/api/downrank/classes")
+def downrank_classes() -> list[dict]:
+    try:
+        with _talent_conn() as conn:
+            rows = conn.execute("SELECT slug, class_id, name, data_json FROM downrank_classes ORDER BY name").fetchall()
+    except sqlite3.OperationalError:
+        raise HTTPException(status_code=503, detail="Downrank data missing — re-run the ingest.") from None
+    out = []
+    for r in rows:
+        spells = json.loads(r["data_json"])["spells"]
+        out.append({"slug": r["slug"], "id": r["class_id"], "name": r["name"], "spells": len(spells),
+                    "heals": sum(s["role"] == "heal" for s in spells), "changed": sum(s["status"] != "unchanged" for s in spells)})
+    return out
+
+
+@app.get("/api/downrank/meta")
+def downrank_meta() -> dict:
+    with _talent_conn() as conn:
+        m = db.read_meta(conn)
+    n = lambda key: int(m.get(f"downrank_{key}", 0))  # noqa: E731
+    return {
+        "forever_build": m.get("forever_build"), "forever_build_id": m.get("forever_build_id"),
+        "classic_era_build": m.get("classic_era_build"), "classic_era_build_id": m.get("classic_era_build_id"),
+        "refreshed_at": m.get("refreshed_at"),
+        "classes": n("classes"), "spells": n("spells"), "ranks": n("ranks"),
+        "changed": n("status_changed"), "new": n("status_new"), "unchanged": n("status_unchanged"),
+        "coef_measured": n("coef_measured"), "formula_checked": n("formula_checked"),
+        "formula_match": n("formula_match"), "problems": n("problems"),
+    }
+
+
+@app.get("/api/downrank/{class_slug}")
+def downrank_class(class_slug: str) -> JSONResponse:
+    try:
+        with _talent_conn() as conn:
+            row = conn.execute("SELECT data_json FROM downrank_classes WHERE slug = ?",
+                               (class_slug.lower(),)).fetchone()
+    except sqlite3.OperationalError:
+        raise HTTPException(status_code=503, detail="Downrank data missing — re-run the ingest.") from None
+    if row is None:
+        raise HTTPException(status_code=404, detail="No spell-power spells for that class.")
+    return JSONResponse(content=json.loads(row["data_json"]))
