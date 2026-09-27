@@ -145,6 +145,33 @@
   .lint li.error b { color: var(--alert); } .lint li.warn b { color: var(--warn); } .lint li.info b { color: var(--info); }
   .lint .clean { border-color: var(--ok); color: var(--ok); }
 
+  .to-free { margin-top: 0.8rem; }
+  .line { display: grid; gap: 0.6rem; }
+  .line-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; }
+  .line-head .ln { font-family: var(--mono); font-size: 0.72rem; color: var(--gold); width: 1.2rem; }
+  .line-head select.cmd { font-family: var(--mono); color: var(--gold); }
+  .line-head .desc { font-size: 0.72rem; color: var(--ink-dim); flex: 1 1 10rem; min-width: 0; }
+  .branch { display: grid; gap: 0.5rem; border-left: 2px solid var(--panel-edge); padding-left: 0.7rem; min-width: 0; }
+  .branch-head { display: flex; align-items: center; gap: 0.5rem; }
+  .lbl { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); }
+  .else { font-family: var(--mono); font-size: 0.8rem; color: var(--gold); }
+  .else span { font-size: 0.64rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-dim); }
+  .always { font-size: 0.74rem; color: var(--ink-dim); }
+  .bracket { background: var(--bg); border: 1px solid var(--panel-edge); border-radius: 8px; padding: 0.5rem 0.6rem; display: grid; gap: 0.45rem; min-width: 0; }
+  .bracket-head { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+  .bracket-head code { font-family: var(--mono); font-size: 0.78rem; color: var(--gold); flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .bracket-head .or { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-dim); order: -1; }
+  .bracket-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(135px, 1fr)); gap: 0.45rem; }
+  .bracket-fields .field.more { display: none; }
+  .bracket-fields.open .field.more { display: flex; }
+  .bracket-fields .field.wide { grid-column: 1 / -1; display: none; }
+  .bracket-fields.open .field.wide { display: flex; }
+  .bracket-fields select, .bracket-fields input { font-size: 0.8rem; padding: 0.35rem 0.45rem; width: 100%; }
+  .more-btn { justify-self: start; }
+  .prov { font-size: 0.56rem; color: var(--warn); border: 1px solid; border-radius: 999px; padding: 0 0.3rem; letter-spacing: 0.05em; }
+  .reset { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; font-size: 0.8rem; color: var(--ink-dim); margin-bottom: 0.3rem; }
+  .reset input[type=number] { width: 4.5rem; }
+  .add-line { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
   .empty { font-size: 0.85rem; color: var(--ink-dim); padding: 1rem 0; }
   .note { font-size: 0.74rem; color: var(--ink-dim); line-height: 1.6; margin-top: 1.2rem; }
   .note code, .blurb code { font-family: var(--mono); font-size: 0.7rem; color: var(--ink); }
@@ -174,7 +201,7 @@
 const CLASS_COLORS = { druid: '#ff7c0a', hunter: '#aad372', mage: '#3fc7eb', paladin: '#f48cba', priest: '#ffffff',
   rogue: '#fff468', shaman: '#2d8cf0', warlock: '#8788ee', warrior: '#c69b6d' };
 const M = window.Macro;
-const state = { classes: [], data: null, items: null, mode: 'tpl', tpl: 'mouseover-help', v: {} };
+const state = { classes: [], data: null, items: null, mode: 'tpl', tpl: 'mouseover-help', v: {}, free: null };
 
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -293,7 +320,118 @@ function tplEditor() {
 }
 
 function currentConfig() {
-  return M.TEMPLATE[state.tpl].build(state.v);
+  return state.mode === 'free' ? state.free : M.TEMPLATE[state.tpl].build(state.v);
+}
+
+// ── freeform mode ────────────────────────────────────────────────────────
+// Edits state.free (a Macro config) directly: lines → branches (joined by
+// ";") → OR'd brackets → conditionals.
+const COMMON_FIELDS = ['u', 'r', 'd', 'e', 'm', 'c', 's'];
+const newLine = c => ({ c, b: [newBranch(c)] });
+const newBranch = c => (['seq', 'list'].includes((M.COMMAND[c] || {}).arg) ? { g: [], q: [null, null], rs: {} } : { g: [], a: null });
+const clone = o => JSON.parse(JSON.stringify(o));
+
+function fieldOptions(f) {
+  if (f.k === 'u') return M.UNITS.map(u => [u.v, u.label]);
+  if (f.k === 's') {
+    const st = M.STANCES[state.data.slug];
+    if (!st) return null;
+    return [['stance', 'In any stance/form'], ['nostance', 'No stance/form'], ...st.forms.map(([n, l]) => [`stance:${n}`, `stance:${n} — ${l}`])];
+  }
+  return f.opts && f.opts.map(o => [o, o]);
+}
+
+function bracketEditor(k, br, gi, count) {
+  const fields = M.BRACKET_FIELDS.map(f => {
+    if (f.k === 'x') {
+      return `<div class="field wide"><label title="Comma-separated, e.g. talent:3/2, equipped:Shields, channeling:Mind Flay">Other conditionals</label>
+        <input type="text" data-k="${k}.x" data-part="text" value="${esc(br.x || '')}" placeholder="e.g. equipped:Shields, known:Blink" spellcheck="false"></div>`;
+    }
+    const opts = fieldOptions(f);
+    if (!opts) return '';
+    const cur = br[f.k] || '';
+    const note = f.k === 's' && M.STANCES[state.data.slug] && M.STANCES[state.data.slug].provisional ? ' title="Verify in-game: numbering follows your stance bar"' : '';
+    const prov = f.k === 'sp' ? ' <span class="prov" title="Probably Forever\'s Primary (1) / Secondary (2) talent setup. Verify in-game.">verify</span>' : '';
+    return `<div class="field${COMMON_FIELDS.includes(f.k) ? '' : ' more'}"><label${note}>${esc(f.label)}${prov}</label>
+      <select data-k="${k}.${f.k}" data-part="value"><option value="">${f.k === 'u' ? '(default)' : '—'}</option>
+      ${opts.map(([v, l]) => `<option value="${esc(v)}"${cur === v ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`;
+  }).join('');
+  const toks = M.bracketTokens(br);
+  const open = M.BRACKET_FIELDS.some(f => !COMMON_FIELDS.includes(f.k) && br[f.k]);
+  return `<div class="bracket">
+    <div class="bracket-head"><code>[${esc(toks.join(','))}]</code>${gi ? '<span class="or">or</span>' : ''}
+      <button class="icon-btn" data-act="del" data-k="${k.replace(/\.\d+$/, '')}" data-i="${gi}" title="Remove this bracket">✕</button></div>
+    <div class="bracket-fields${open ? ' open' : ''}">${fields}</div>
+    <button class="icon-btn more-btn" data-act="more">${open ? 'Fewer' : 'More'} conditionals</button>
+  </div>`;
+}
+
+function argEditor(k, cmd, b) {
+  const spec = M.COMMAND[cmd] || { arg: 'none' };
+  if (spec.arg === 'spell') return `<div class="field"><label>Spell</label>${spellPicker(`${k}.a`, b.a, {}, { toggle: true })}</div>`;
+  if (spec.arg === 'aura') return `<div class="field"><label>Buff to cancel</label>${spellPicker(`${k}.a`, b.a, { suggest: 'buff' }, { noRank: true })}</div>`;
+  if (spec.arg === 'item') {
+    return `<div class="field"><label>Item or slot</label><div class="picker">
+      <select data-k="${k}.a" data-part="slot"><option value="">Item by name…</option>
+        ${[['13', '13 — top trinket'], ['14', '14 — bottom trinket']].map(([v, l]) => `<option value="${v}"${b.a && b.a.n === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+      ${b.a && /^1[34]$/.test(b.a.n) ? '' : itemPicker(`${k}.a`, b.a)}</div></div>`;
+  }
+  if (spec.arg === 'itemname') return `<div class="field"><label>Item</label>${itemPicker(`${k}.a`, b.a)}</div>`;
+  if (spec.arg === 'text') return `<div class="field"><label>Name (optional)</label><input type="text" data-k="${k}.a" data-part="custom" value="${esc(b.a && b.a.n || '')}" placeholder="Leave empty to use the @unit" spellcheck="false"></div>`;
+  if (spec.arg === 'seq' || spec.arg === 'list') {
+    const q = b.q || (b.q = []);
+    const rs = b.rs || (b.rs = {});
+    const reset = spec.arg === 'seq' ? `<div class="reset"><span class="lbl">reset=</span>
+      <input type="number" min="0" max="600" data-k="${k}.rs.s" data-part="number" value="${Number(rs.s) || 0}" title="Seconds without a press (0 = off)"> s
+      <label class="check"><input type="checkbox" data-k="${k}.rs.t" data-part="bool"${rs.t ? ' checked' : ''}> target</label>
+      <label class="check"><input type="checkbox" data-k="${k}.rs.c" data-part="bool"${rs.c ? ' checked' : ''}> combat</label>
+      ${modSelect(`${k}.rs.m`, rs.m || '', 'no mod')}</div>` : '';
+    return `<div class="field"><label>${spec.arg === 'seq' ? 'Sequence' : 'Pick one at random from'}</label>${reset}<div class="list">
+      ${q.map((a, i) => `<div class="list-row"><span class="n">${i + 1}</span>${spellPicker(`${k}.q.${i}`, a, {})}
+        <button class="icon-btn" data-act="up" data-k="${k}.q" data-i="${i}" ${i ? '' : 'disabled'} title="Move up">↑</button>
+        <button class="icon-btn" data-act="del" data-k="${k}.q" data-i="${i}" ${q.length > 1 ? '' : 'disabled'} title="Remove">✕</button></div>`).join('')}
+      <button class="icon-btn add-btn" data-act="add" data-k="${k}.q" ${q.length >= 12 ? 'disabled' : ''}>+ Add spell</button></div></div>`;
+  }
+  return '';
+}
+
+function commandSelect(k, cur) {
+  const groups = [...new Set(M.COMMANDS.map(c => c.group))];
+  return `<select class="cmd" data-k="${k}" data-part="cmd">${groups.map(g => `<optgroup label="${g}">${M.COMMANDS.filter(c => c.group === g)
+    .map(c => `<option value="${c.c}"${c.c === cur ? ' selected' : ''}>/${c.c}</option>`).join('')}</optgroup>`).join('')}</select>`;
+}
+
+function freeEditor() {
+  const f = state.free;
+  const lines = f.l.map((line, li) => {
+    const k = `free.l.${li}`;
+    const spec = M.COMMAND[line.c] || {};
+    const branches = line.b.map((b, bi) => {
+      const bk = `${k}.b.${bi}`;
+      const groups = (b.g || (b.g = [])).map((br, gi) => bracketEditor(`${bk}.g.${gi}`, br, gi, b.g.length)).join('');
+      return `${bi ? '<div class="else">; <span>otherwise</span></div>' : ''}<div class="branch">
+        <div class="branch-head"><span class="lbl">${line.b.length > 1 ? `Branch ${bi + 1}` : 'Conditions'}</span>
+          ${line.b.length > 1 ? `<button class="icon-btn" data-act="del" data-k="${k}.b" data-i="${bi}" title="Remove this branch">✕</button>` : ''}</div>
+        ${groups || '<div class="always">No conditions: always runs.</div>'}
+        <button class="icon-btn add-btn" data-act="add" data-init="bracket" data-k="${bk}.g">+ ${b.g.length ? 'OR bracket' : 'Condition bracket [ ]'}</button>
+        ${argEditor(bk, line.c, b)}
+      </div>`;
+    }).join('');
+    return `<div class="panel line">
+      <div class="line-head"><span class="ln">${li + 1}</span>${commandSelect(k + '.c', line.c)}
+        <span class="desc">${esc(spec.desc || '')}</span>
+        <button class="icon-btn" data-act="up" data-k="free.l" data-i="${li}" ${li ? '' : 'disabled'} title="Move up">↑</button>
+        <button class="icon-btn" data-act="down" data-k="free.l" data-i="${li}" ${li < f.l.length - 1 ? '' : 'disabled'} title="Move down">↓</button>
+        <button class="icon-btn" data-act="del" data-k="free.l" data-i="${li}" title="Remove line">✕</button></div>
+      ${branches}
+      <button class="icon-btn add-btn" data-act="add" data-init="branch" data-k="${k}.b" title="Adds “; …” — used when the conditions above don't match">+ Fallback branch ( ; )</button>
+    </div>`;
+  }).join('');
+  return `<div class="panel"><h2>Tooltip line</h2><div class="picker">
+      <select data-k="free.sh" data-part="int">${[[0, 'None'], [1, '#showtooltip'], [2, '#show (icon only)']].map(([v, l]) => `<option value="${v}"${(f.sh || 0) === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+    </div>${f.sh ? `<div class="field" style="margin-top:.5rem"><label>Show this spell (optional; default = the first one the macro would cast)</label>${spellPicker('free.shn', f.shn, { optional: true }, { noRank: true })}</div>` : ''}</div>
+    ${lines}
+    <div class="panel add-line"><span class="lbl">Add a line</span>${commandSelect('newline', 'cast')}<button class="btn" data-act="addline">+ Add line</button></div>`;
 }
 
 // ── output ───────────────────────────────────────────────────────────────
@@ -341,7 +479,10 @@ function outputPanel() {
 function render() {
   document.getElementById('app').innerHTML = `
     <div class="builder">
-      <div id="editor">${tplEditor()}</div>
+      <div><div class="seg modes" id="modes">
+          <button data-mode="tpl" class="${state.mode === 'tpl' ? 'on' : ''}">Templates</button>
+          <button data-mode="free" class="${state.mode === 'free' ? 'on' : ''}">Freeform builder</button></div>
+        <div id="editor">${editorHtml()}</div></div>
       ${outputPanel()}
     </div>
     <datalist id="dl-names">${state.data.spells.map(s => `<option value="${esc(s.name)}">`).join('')}</datalist>
@@ -351,10 +492,26 @@ function render() {
   renderOutput();
 }
 
+function editorHtml() {
+  if (state.mode === 'free') return freeEditor();
+  return tplEditor() + `<p class="to-free"><button class="btn quiet" data-act="tofree">Edit this in the freeform builder →</button></p>`;
+}
+
 function renderEditor() {
   const ed = document.getElementById('editor');
-  ed.innerHTML = tplEditor();
+  // Keep the "more conditionals" drawers the user opened.
+  const open = [...ed.querySelectorAll('.bracket-fields.open select')].map(e => e.dataset.k.replace(/\.[a-z]+$/, ''));
+  ed.innerHTML = editorHtml();
+  open.forEach(k => { const el = ed.querySelector(`select[data-k="${k}.u"]`); if (el) el.closest('.bracket-fields').classList.add('open'); });
+  document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('on', b.dataset.mode === state.mode));
   renderOutput();
+}
+
+function setMode(mode) {
+  if (mode === state.mode) return;
+  if (mode === 'free' && !state.free) state.free = clone(currentConfig());
+  state.mode = mode;
+  renderEditor();
 }
 
 // Path "v.spell" / "v.spells.2" → get/set inside state.
@@ -373,7 +530,8 @@ function onChange(e) {
   const k = el.dataset.k, part = el.dataset.part;
   if (!k || !part) return;
   const typing = e.type === 'input';
-  if (typing && !(part === 'custom' || part === 'number')) return;
+  if (typing && !(part === 'custom' || part === 'number' || part === 'text')) return;
+  if (k === 'newline') return;
   let structural = false;
   if (part === 'name' || part === 'custom' || part === 'rank' || part === 'toggle') {
     const next = pickerValue(getPath(k), part, el);
@@ -381,13 +539,42 @@ function onChange(e) {
     setPath(k, next);
   } else if (part === 'bool') { setPath(k, el.checked); structural = true; }
   else if (part === 'number') setPath(k, Math.max(0, Math.round(Number(el.value) || 0)));
+  else if (part === 'text') setPath(k, el.value);
+  else if (part === 'int') { setPath(k, Number(el.value) || 0); structural = true; }
+  else if (part === 'slot') { setPath(k, el.value ? { n: el.value } : null); structural = true; }
+  else if (part === 'cmd') {
+    // New command: keep the conditions, reshape each branch's argument.
+    const line = getPath(k.replace(/\.c$/, ''));
+    const arg = c => (M.COMMAND[c] || {}).arg;
+    if (arg(line.c) !== arg(el.value)) line.b = line.b.map(b => ({ ...newBranch(el.value), g: b.g || [] }));
+    line.c = el.value;
+    structural = true;
+  }
   else { setPath(k, el.value); structural = true; }
-  if (structural && !typing) renderEditor(); else renderOutput();
+  if (structural && !typing) renderEditor();
+  else {
+    renderOutput();
+    // Keep a bracket's [preview] in step while its free-text field is typed in.
+    const head = el.closest('.bracket') && el.closest('.bracket').querySelector('.bracket-head code');
+    if (head) head.textContent = `[${M.bracketTokens(getPath(k.replace(/\.[a-z]+$/, ''))).join(',')}]`;
+  }
 }
 
 function onClick(e) {
-  const t = e.target.closest('[data-tpl],[data-act]');
+  const t = e.target.closest('[data-tpl],[data-act],[data-mode]');
   if (!t) return;
+  if (t.dataset.mode) { setMode(t.dataset.mode); return; }
+  if (t.dataset.act === 'tofree') { state.free = clone(currentConfig()); setMode('free'); return; }
+  if (t.dataset.act === 'more') {
+    const fields = t.previousElementSibling;
+    t.textContent = fields.classList.toggle('open') ? 'Fewer conditionals' : 'More conditionals';
+    return;
+  }
+  if (t.dataset.act === 'addline') {
+    state.free.l.push(newLine(document.querySelector('select[data-k="newline"]').value));
+    renderEditor();
+    return;
+  }
   if (t.dataset.tpl) {
     if (t.dataset.tpl === state.tpl) return;
     state.tpl = t.dataset.tpl;
@@ -397,9 +584,14 @@ function onClick(e) {
   }
   const list = getPath(t.dataset.k);
   const i = Number(t.dataset.i);
-  if (t.dataset.act === 'add') list.push(null);
-  else if (t.dataset.act === 'del') list.splice(i, 1);
+  if (t.dataset.act === 'add') {
+    const init = t.dataset.init;
+    if (init === 'bracket') list.push({});
+    else if (init === 'branch') list.push(newBranch(getPath(t.dataset.k.replace(/\.b$/, '')).c));
+    else list.push(null);
+  } else if (t.dataset.act === 'del') list.splice(i, 1);
   else if (t.dataset.act === 'up' && i > 0) [list[i - 1], list[i]] = [list[i], list[i - 1]];
+  else if (t.dataset.act === 'down' && i < list.length - 1) [list[i], list[i + 1]] = [list[i + 1], list[i]];
   renderEditor();
 }
 
@@ -419,9 +611,9 @@ function wireOutput() {
 }
 
 // ── URL ──────────────────────────────────────────────────────────────────
-// /macros/<class>?m=<base64url JSON>: { t, v } for a template.
+// /macros/<class>?m=<base64url JSON>: { t, v } for a template, { f } for freeform.
 function shareState() {
-  return { t: state.tpl, v: state.v };
+  return state.mode === 'free' ? { f: state.free } : { t: state.tpl, v: state.v };
 }
 function syncUrl() {
   if (!state.data) return;
@@ -436,6 +628,23 @@ function applyShared(st) {
     state.v = { ...M.templateDefaults(M.TEMPLATE[st.t], spellCtx()), ...(st.v || {}) };
     return true;
   }
+  if (st && st.f) {
+    // Shape-check a shared freeform config so the editor can walk it.
+    const f = st.f;
+    f.sh = [0, 1, 2].includes(f.sh) ? f.sh : 0;
+    f.l = (Array.isArray(f.l) ? f.l : []).filter(l => l && M.COMMAND[l.c]).map(l => ({
+      c: l.c,
+      b: (Array.isArray(l.b) && l.b.length ? l.b : [newBranch(l.c)]).map(b => ({
+        ...newBranch(l.c), ...b,
+        g: Array.isArray(b.g) ? b.g.filter(g => g && typeof g === 'object') : [],
+        ...(Array.isArray(b.q) ? {} : ['seq', 'list'].includes(M.COMMAND[l.c].arg) ? { q: [] } : {}),
+      })),
+    }));
+    state.mode = 'free';
+    state.free = f;
+    state.v = M.templateDefaults(M.TEMPLATE[state.tpl], spellCtx());  // the Templates tab follows the class
+    return true;
+  }
   return false;
 }
 
@@ -445,7 +654,10 @@ function renderClasses() {
       ${esc(c.name)}<span class="n">${c.spells} spells</span></button>`).join('');
   document.querySelectorAll('.class-btn').forEach(b => b.addEventListener('click', async () => {
     if (state.data && state.data.slug === b.dataset.slug) return;
-    history.pushState(null, '', new URL(b.dataset.slug, document.baseURI).href);
+    // Freeform work carries over to the new class (the linter flags spells it doesn't have);
+    // templates start over with the new class's defaults.
+    const keep = state.data && state.mode === 'free' ? `?m=${M.encode(shareState())}` : '';
+    history.pushState(null, '', new URL(b.dataset.slug + keep, document.baseURI).href);
     await loadFromUrl();
   }));
 }
@@ -464,6 +676,8 @@ async function loadFromUrl() {
   document.title = `${state.data.name} Macro Builder — WoW: Forever`;
   if (!applyShared(q.has('m') ? M.decode(q.get('m')) : null)) {
     state.v = M.templateDefaults(M.TEMPLATE[state.tpl], spellCtx());
+    state.mode = 'tpl';
+    state.free = null;
   }
   renderClasses();
   render();

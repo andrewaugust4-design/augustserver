@@ -283,7 +283,8 @@
               if (unit) add('error', `${where}: two targets in one bracket (@${unit}, @${t.unit}).`, ln);
               unit = t.unit.toLowerCase();
               const base = unit.replace(/\d+$/, '').replace(/(target)+$/, '');
-              if (EXCLUDED_UNITS[base]) add('error', `${where}: @${unit} — ${EXCLUDED_UNITS[base]}.`, ln);
+              if (!/^[a-z0-9-]+$/i.test(unit)) add('error', `${where}: “@${t.unit}” isn't a valid unit.`, ln);
+              else if (EXCLUDED_UNITS[base]) add('error', `${where}: @${unit} — ${EXCLUDED_UNITS[base]}.`, ln);
               else if (!UNIT_RE.test(unit)) add('info', `${where}: @${t.unit} isn't a unit ID; it only works as a group member's name.`, ln);
               continue;
             }
