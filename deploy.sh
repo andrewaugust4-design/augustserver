@@ -39,9 +39,16 @@ deploy_tool() {
 # and common/ as siblings that the app imports at runtime, so sync the whole
 # tool directory (minus the local-only venv/data/.env) instead of just app/.
 deploy_wow() {
+  # cdnextract (the CDN fallback for the ingest) is a .NET binary built here,
+  # as you, into wow/cdnextract/publish/ -- then synced like everything else.
+  echo "==> building wow/cdnextract"
+  if ! wow/cdnextract/build.sh; then
+    echo "!! cdnextract build failed; deploying without updating it (the ingest's CDN fallback needs it)" >&2
+  fi
   echo "==> wow/ -> /opt/wow/"
   sudo rsync -a --delete \
     --exclude venv/ --exclude data/ --exclude .env --exclude __pycache__/ \
+    --exclude cdnextract/bin/ --exclude cdnextract/obj/ \
     wow/ /opt/wow/
   echo "==> restarting wow.service"
   sudo systemctl restart wow

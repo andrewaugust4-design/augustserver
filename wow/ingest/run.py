@@ -1,7 +1,15 @@
-"""CLI entrypoint: refresh /opt/wow/data/wow.db from the latest wago.tools
-Forever beta + Classic Era builds.
+"""CLI entrypoint: refresh /opt/wow/data/wow.db from the latest Forever beta
++ Classic Era builds.
 
-    python -m ingest.run [--force] [--warm-icons]
+    python -m ingest.run [--force] [--warm-icons] [--source auto|wago|cdn]
+
+DB2 tables come from wago.tools' CSV export (primary). If Blizzard's CDN
+already serves a newer build than wago.tools has processed, that build's
+tables are extracted straight from the CDN instead (ingest/cdn_client.py) —
+same CSV shape, same cache dir, so nothing downstream changes. ``--source
+cdn`` (or ``--cdn``) forces the CDN path for the Forever build. This is a
+parity fallback for wago.tools lag, not a way past Blizzard's withheld-key
+encryption: still-encrypted rows are skipped either way.
 
 Run once by hand after first deploy to populate the DB, then scheduled daily
 by wow-refresh.timer (see deploy/). Idempotent: re-running on an unchanged
@@ -23,7 +31,7 @@ from common import icons
 from common.armor import ARMOR_TABLES
 from common.constants import CLASSIC_ERA_PRODUCT, FOREVER_PRODUCT
 
-from . import downrank, effects, quests, talents, validate_character, wago_client
+from . import cdn_client, downrank, effects, quests, talents, validate_character, wago_client
 from .character_data import CHARACTER_TABLES, load_character_data
 from .normalize import diff_items, load_armor_tables, load_budgets, parse_build, write_db
 from .validate import ValidationError, validate
@@ -38,26 +46,104 @@ TABLES = ("Item", "ItemSparse")
 THUNDERFURY = 19019  # effect anchor: its Chance on hit line must render from the spell tables
 FOREVER_ONLY_TABLES = ("RandPropPoints", *ARMOR_TABLES, *CHARACTER_TABLES)
 
+# Every DB2 table the ingest reads, per build.
+FOREVER_TABLES = tuple(dict.fromkeys((*TABLES, *FOREVER_ONLY_TABLES, *effects.FOREVER_TABLES, *quests.FOREVER_TABLES,
+                                      *talents.FOREVER_TABLES, *downrank.FOREVER_TABLES)))
+ERA_TABLES = tuple(dict.fromkeys((*TABLES, *effects.ERA_TABLES, *quests.ERA_TABLES, *talents.ERA_TABLES,
+                                  *downrank.ERA_TABLES)))
+
+
+def _build_id(version: str) -> int:
+    return int(version.rsplit(".", 1)[-1])
+
+
+def resolve_build(product: str, wago_builds: dict | None, source: str) -> dict:
+    """Pick the build (and where its tables come from) for one product.
+
+    wago.tools is primary. ``auto`` switches to Blizzard's CDN only when the
+    CDN already serves a newer build than wago.tools lists (wago.tools
+    lagging) or wago.tools is unreachable; ``cdn`` forces the CDN build.
+    Returns ``{source, version, build_config, cdn_config, ..., icon_build,
+    cdn_build}`` — ``cdn_build`` is kept for a mid-download wago fallback."""
+    wago = wago_client.latest_build(product, wago_builds) if wago_builds and wago_builds.get(product) else None
+    icon_build = wago["version"] if wago else None
+    if source == "wago" and wago is None:
+        raise RuntimeError(f"wago.tools returned no builds for product {product!r}")
+
+    cdn = None
+    if source != "wago":
+        try:
+            cdn = cdn_client.current_build(product)
+            log.info("%s on Blizzard's CDN: %s (build_config=%s cdn_config=%s)",
+                     product, cdn["version"], cdn["build_config"], cdn["cdn_config"])
+        except Exception:
+            if source == "cdn" or wago is None:
+                raise
+            log.warning("Blizzard version service lookup failed for %s — staying on wago.tools", product, exc_info=True)
+
+    if source == "cdn" or wago is None or (cdn and _build_id(cdn["version"]) > _build_id(wago["version"])):
+        if source == "auto" and wago is not None:
+            log.warning("wago.tools is behind for %s (has %s, CDN serves %s) — extracting from the CDN",
+                        product, wago["version"], cdn["version"])
+        return {**cdn, "source": "cdn", "icon_build": icon_build, "cdn_build": cdn}
+    return {**wago, "source": "wago", "icon_build": icon_build, "cdn_build": cdn}
+
+
+def fetch_tables(build: dict, tables: tuple[str, ...], args: argparse.Namespace) -> None:
+    """Get every table's CSV into CACHE_DIR/<version>/ from the chosen source.
+    In auto mode a failed wago.tools download (e.g. the build is listed but
+    not exported yet) falls back to the CDN when it serves the same build."""
+    if build["source"] == "cdn":
+        cdn_client.extract_tables(build, tables, CACHE_DIR, force=args.force)
+        return
+    try:
+        for table in tables:
+            wago_client.download_csv(table, build["version"], CACHE_DIR, force=args.force)
+    except Exception:
+        cdn = build.get("cdn_build")
+        if args.source != "auto" or not cdn or cdn["version"] != build["version"]:
+            raise
+        log.warning("wago.tools download failed for %s — extracting it from the CDN instead", build["version"], exc_info=True)
+        build.update({**cdn, "source": "cdn", "icon_build": build["icon_build"]})
+        cdn_client.extract_tables(cdn, tables, CACHE_DIR, force=args.force)
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--force", action="store_true", help="re-download CSVs even if cached")
     parser.add_argument("--warm-icons", action="store_true",
                         help="after ingest, pre-fetch item icons that aren't cached yet (needs Blizzard API keys)")
+    parser.add_argument("--source", choices=("auto", "wago", "cdn"), default="auto",
+                        help="where the Forever build's DB2 tables come from: auto (wago.tools, or Blizzard's CDN "
+                             "when it has a newer build than wago.tools), wago, or cdn (force a CDN pull now)")
+    parser.add_argument("--cdn", dest="source", action="store_const", const="cdn", help="same as --source cdn")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    builds = wago_client.get_builds()
-    forever_build = wago_client.latest_build(FOREVER_PRODUCT, builds)
-    era_build = wago_client.latest_build(CLASSIC_ERA_PRODUCT, builds)
-    forever_version = forever_build["version"]
-    era_version = era_build["version"]
+    try:
+        builds = wago_client.get_builds()
+    except Exception:
+        if args.source == "wago":
+            raise
+        log.warning("wago.tools build list unavailable — resolving builds from Blizzard's CDN", exc_info=True)
+        builds = None
 
-    log.info("Forever candidate: product=%s version=%s created_at=%s", FOREVER_PRODUCT, forever_version, forever_build.get("created_at"))
-    log.info("Classic Era baseline: product=%s version=%s created_at=%s", CLASSIC_ERA_PRODUCT, era_version, era_build.get("created_at"))
+    forever = resolve_build(FOREVER_PRODUCT, builds, args.source)
+    era = resolve_build(CLASSIC_ERA_PRODUCT, builds, "wago" if args.source == "wago" else "auto")
+    forever_version = forever["version"]
+    era_version = era["version"]
 
-    description = wago_client.describe_build(forever_build["build_config"])
+    log.info("Forever candidate: product=%s version=%s source=%s", FOREVER_PRODUCT, forever_version, forever["source"])
+    log.info("Classic Era baseline: product=%s version=%s source=%s", CLASSIC_ERA_PRODUCT, era_version, era["source"])
+
+    fetch_tables(forever, FOREVER_TABLES, args)
+    fetch_tables(era, ERA_TABLES, args)
+
+    if forever["source"] == "cdn":
+        description = cdn_client.build_name(CACHE_DIR, forever_version)
+    else:
+        description = wago_client.describe_build(forever["build_config"])
     if description is None:
         log.warning("Could not confirm build_config description for %s — proceeding on product name alone. "
                     "If item data looks wrong, re-check FOREVER_PRODUCT in common/constants.py against "
@@ -68,28 +154,6 @@ def main() -> None:
                     FOREVER_PRODUCT, description)
     else:
         log.info("Confirmed via build_config description: %s", description)
-
-    for version in (forever_version, era_version):
-        for table in TABLES:
-            wago_client.download_csv(table, version, CACHE_DIR, force=args.force)
-    for table in FOREVER_ONLY_TABLES:
-        wago_client.download_csv(table, forever_version, CACHE_DIR, force=args.force)
-    for table in effects.ERA_TABLES:
-        wago_client.download_csv(table, era_version, CACHE_DIR, force=args.force)
-    for table in effects.FOREVER_TABLES:
-        wago_client.download_csv(table, forever_version, CACHE_DIR, force=args.force)
-    for table in quests.FOREVER_TABLES:
-        wago_client.download_csv(table, forever_version, CACHE_DIR, force=args.force)
-    for table in quests.ERA_TABLES:
-        wago_client.download_csv(table, era_version, CACHE_DIR, force=args.force)
-    for table in talents.FOREVER_TABLES:
-        wago_client.download_csv(table, forever_version, CACHE_DIR, force=args.force)
-    for table in talents.ERA_TABLES:
-        wago_client.download_csv(table, era_version, CACHE_DIR, force=args.force)
-    for table in downrank.FOREVER_TABLES:
-        wago_client.download_csv(table, forever_version, CACHE_DIR, force=args.force)
-    for table in downrank.ERA_TABLES:
-        wago_client.download_csv(table, era_version, CACHE_DIR, force=args.force)
 
     budgets = load_budgets(CACHE_DIR / forever_version / "RandPropPoints.csv")
     forever_items = parse_build(
@@ -114,6 +178,13 @@ def main() -> None:
     meta = {
         "forever_product": FOREVER_PRODUCT,
         "forever_build": forever_version,
+        "forever_source": forever["source"],
+        "forever_build_config": forever.get("build_config") or "",
+        "forever_cdn_config": forever.get("cdn_config") or "",
+        # wago.tools serves talent icons by FileDataID for builds it knows; a
+        # CDN-only build isn't one of those yet, so point icon fetches at the
+        # newest Forever build wago.tools has.
+        "icon_build": forever["icon_build"] or "",
         "forever_build_id": forever_version.rsplit(".", 1)[-1],
         "classic_era_build": era_version,
         "classic_era_build_id": era_version.rsplit(".", 1)[-1],
@@ -185,7 +256,10 @@ def main() -> None:
     # already-cached ones are skipped, so this is quick after the first run.
     fdids = sorted({t["icon"] for r in talent_rows for t in json.loads(r[4])["talents"] if t["icon"]}
                    | {tr["icon"] for r in talent_rows for tr in json.loads(r[4])["trees"] if tr["icon"]})
-    log.info("Talent icons: %s", icons.warm_file_icons(fdids, forever_version))
+    if forever["icon_build"]:
+        log.info("Talent icons: %s", icons.warm_file_icons(fdids, forever["icon_build"]))
+    else:
+        log.warning("Talent icons: wago.tools knows no Forever build yet, skipping the warm")
 
     if args.warm_icons:
         if not icons.enabled():

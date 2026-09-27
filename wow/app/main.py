@@ -813,7 +813,10 @@ def _forever_build() -> str | None:
         return None
     if _forever_build_cache["mtime"] != mtime:
         with db.get_conn() as conn:
-            _forever_build_cache.update(mtime=mtime, build=db.read_meta(conn).get("forever_build"))
+            m = db.read_meta(conn)
+            # icon_build: newest Forever build wago.tools knows (differs from
+            # forever_build when that build was pulled from the CDN).
+            _forever_build_cache.update(mtime=mtime, build=m.get("icon_build") or m.get("forever_build"))
     return _forever_build_cache["build"]
 
 

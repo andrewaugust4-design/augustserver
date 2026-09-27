@@ -30,6 +30,8 @@ There's no HTML scraping of item data. Everything comes from
   `https://wago.tools/db2/<Table>/csv?build=<version>` (note: the query
   param is `build`, not `version`). CSVs are cached under `data/raw/<build>/`
   so re-runs on an unchanged build don't re-download.
+- When wago.tools lags a new build, the same tables come **straight from
+  Blizzard's CDN** instead. See [CDN fallback](#cdn-fallback-when-wagotools-is-behind).
 
 ### Stat values (computed, then cross-checked every ingest)
 
@@ -684,6 +686,7 @@ class's base mana at 60, from the client's `PlayerExpectedStat`.
 ```
 python -m ingest.run            # uses cached CSVs if the build hasn't changed
 python -m ingest.run --force    # re-download even if cached
+python -m ingest.run --cdn      # pull the current Forever build from Blizzard's CDN now
 ```
 
 Run once by hand after first deploy (before starting `wow.service`) to
@@ -691,6 +694,73 @@ populate `data/wow.db`, and again after any deploy that changes the DB
 schema (the app reads whatever the last ingest wrote). The set-builder
 deploy is one of those: it adds item race/unique columns and the
 race/class/level tables. In production, `wow-refresh.timer` runs this daily.
+
+## CDN fallback (when wago.tools is behind)
+
+wago.tools is the primary source. `ingest/cdn_client.py` + `cdnextract/`
+can pull a build's DB2 tables **directly from Blizzard's CDN**, and write
+CSVs in wago.tools' exact shape into the same `data/raw/<version>/`. The
+diff, stat/armor computation, validation and SQLite load run unchanged.
+
+> **This is a parity fallback, not a way past the encryption.** DB2 sections
+> encrypted with a TACT key that isn't public (unreleased Forever content)
+> stay encrypted and their rows are skipped, exactly as wago.tools skips
+> them. They appear when Blizzard ships the key (usually via play) and the
+> community [TACTKeys](https://github.com/wowdev/TACTKeys) list picks it up.
+> The CDN route removes wago.tools' processing lag. It doesn't remove that wall.
+
+**When it's used** (`--source`, default `auto`):
+- `auto` asks Blizzard's version service (`us.version.battle.net`, with
+  ribbit `us.patch.battle.net:1119` as backup) for the current
+  `wow_classic_beta` build. If that's newer than the newest build wago.tools
+  lists, or wago.tools is down, the CDN is used. It's also used when
+  wago.tools lists the build but its CSV download fails. Otherwise wago.tools
+  is used. The Era baseline goes through the same `auto` logic.
+- `--source cdn` / `--cdn` forces a CDN pull of the current Forever build.
+  That's the manual unblock. `--source wago` never touches the CDN.
+- `meta.forever_source` records which source was used (`wago`/`cdn`), plus
+  `forever_build_config`/`forever_cdn_config`. `meta.icon_build` is the newest
+  Forever build wago.tools knows. Talent icons are fetched from wago.tools by
+  FileDataID, and it can't serve a build it hasn't processed.
+
+**How it works:**
+1. **Build resolution.** The version service gives the BuildConfig,
+   CDNConfig and ProductConfig hashes. Every build seen is recorded in
+   `data/cdn/builds.json` (`cdn_client.known_build()`). Once Blizzard rotates
+   a build off the version list, those hashes are the only way back to it.
+   Known so far: `wow_classic_beta/1.60.1.70009` = build
+   `05215079e3905ef5922ae0b03ffefb73`, cdn `9b3c456dbb837d133a026d380c7c13e9`.
+2. **Reference data** goes to `data/cdn/ref/`, re-synced at most every 6h:
+   [WoWDBDefs](https://github.com/wowdev/WoWDBDefs) `definitions/` (the
+   schemas) plus `manifest.json` (table → DB2 FileDataID, which removes the
+   need for the 100 MB community listfile), and TACTKeys `WoW.txt`.
+3. **Extraction.** `cdnextract/` is a small .NET 10 tool on
+   [TACTSharp](https://github.com/wowdev/TACTSharp) (CDN/TACT/BLTE) and
+   [DBCD](https://github.com/wowdev/DBCD) + WoWDBDefs. These are the libraries
+   wow.tools.local / wago.tools run, chosen for parse parity on new
+   builds. It fetches only the requested DB2s. The TACT cache is
+   `data/cdn/cache/`: about 600 MB of archive indexes on the first run
+   (~5 min), then about 10 s per build. It matches wago.tools' CSV quirks:
+   arrays as `Name_N`, `Index` renamed `_Index`, and PHP-style floats
+   (`round(x, 11)` then `%.14G`, e.g. `0.20000000298`, `9.0E-5`).
+   A table whose layout isn't in WoWDBDefs yet fails the ingest, and the
+   previous DB is kept. DBCD also matches by layout hash, so a new build
+   number alone is fine.
+
+**Validated 2026-09-27 on 1.60.1.70009**, a build both sources have. All 53
+Forever tables matched wago.tools on IDs, columns and every value; only row
+order differs, and nothing depends on it. A full `--source cdn` ingest gave a
+`wow.db` whose every data table is identical to the wago.tools-built one.
+
+**Building/deploying:** `cdnextract/build.sh` publishes a self-contained
+single-file binary (`cdnextract/publish/cdnextract`, ~74 MB, no .NET runtime
+needed on the box). It needs the .NET 10 SDK to build. It's installed
+user-local in `~/.dotnet`, with no sudo:
+`curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 10.0`.
+`deploy.sh wow` runs `build.sh` before syncing. Override the binary path with
+`WOW_CDNEXTRACT_BIN`. Add CDN hosts with `WOW_CDN_EXTRA_HOSTS`
+(comma-separated, e.g. `archive.wow.tools` as a mirror). TACTSharp ranks CDN
+hosts by ICMP ping, so `ping` must work for the service user.
 
 ## Local dev
 
