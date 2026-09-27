@@ -31,7 +31,7 @@ from common import icons
 from common.armor import ARMOR_TABLES
 from common.constants import CLASSIC_ERA_PRODUCT, FOREVER_PRODUCT
 
-from . import cdn_client, downrank, effects, quests, talents, validate_character, wago_client
+from . import cdn_client, downrank, effects, macros, quests, talents, validate_character, wago_client
 from .character_data import CHARACTER_TABLES, load_character_data
 from .normalize import diff_items, load_armor_tables, load_budgets, parse_build, write_db
 from .validate import ValidationError, validate
@@ -48,7 +48,7 @@ FOREVER_ONLY_TABLES = ("RandPropPoints", *ARMOR_TABLES, *CHARACTER_TABLES)
 
 # Every DB2 table the ingest reads, per build.
 FOREVER_TABLES = tuple(dict.fromkeys((*TABLES, *FOREVER_ONLY_TABLES, *effects.FOREVER_TABLES, *quests.FOREVER_TABLES,
-                                      *talents.FOREVER_TABLES, *downrank.FOREVER_TABLES)))
+                                      *talents.FOREVER_TABLES, *downrank.FOREVER_TABLES, *macros.FOREVER_TABLES)))
 ERA_TABLES = tuple(dict.fromkeys((*TABLES, *effects.ERA_TABLES, *quests.ERA_TABLES, *talents.ERA_TABLES,
                                   *downrank.ERA_TABLES)))
 
@@ -238,7 +238,15 @@ def main() -> None:
     meta.update({f"downrank_{k}": str(v) for k, v in downrank_stats.items()})
     meta["downrank_problems"] = str(len(downrank_problems))
 
-    write_db(DB_PATH, meta, merged, budgets, character, set_rows, quest_rows, talent_rows, downrank_rows)
+    macro_rows, macro_items, macro_stats, macro_problems = macros.build_macros(CACHE_DIR / forever_version, talent_rows)
+    log.info("Macros: %s", macro_stats)
+    for problem in macro_problems:
+        log.error("Macro anchor FAILED: %s", problem)
+    meta.update({f"macros_{k}": str(v) for k, v in macro_stats.items()})
+    meta["macros_problems"] = str(len(macro_problems))
+
+    write_db(DB_PATH, meta, merged, budgets, character, set_rows, quest_rows, talent_rows, downrank_rows,
+             (macro_rows, macro_items))
     log.info("Ingest complete: %s", meta)
 
     # Set-builder sheet cross-checks: logged, never blocking (see validate_character.py).
@@ -252,12 +260,13 @@ def main() -> None:
     finally:
         conn.close()
 
-    # Talent icons come from wago.tools by FileDataID (no API keys needed);
+    # Talent (and macro spell) icons come from wago.tools by FileDataID (no API keys needed);
     # already-cached ones are skipped, so this is quick after the first run.
     fdids = sorted({t["icon"] for r in talent_rows for t in json.loads(r[4])["talents"] if t["icon"]}
-                   | {tr["icon"] for r in talent_rows for tr in json.loads(r[4])["trees"] if tr["icon"]})
+                   | {tr["icon"] for r in talent_rows for tr in json.loads(r[4])["trees"] if tr["icon"]}
+                   | {s["icon"] for r in macro_rows for s in json.loads(r[4])["spells"] if s["icon"]})
     if forever["icon_build"]:
-        log.info("Talent icons: %s", icons.warm_file_icons(fdids, forever["icon_build"]))
+        log.info("Talent/spell icons: %s", icons.warm_file_icons(fdids, forever["icon_build"]))
     else:
         log.warning("Talent icons: wago.tools knows no Forever build yet, skipping the warm")
 

@@ -895,3 +895,77 @@ def downrank_class(class_slug: str) -> JSONResponse:
     if row is None:
         raise HTTPException(status_code=404, detail="No spell-power spells for that class.")
     return JSONResponse(content=json.loads(row["data_json"]))
+
+
+# ── Macro Builder (sub-tool #5) ─────────────────────────────────────────────
+# Data: ingest/macros.py (each class's castable spells + consumable names).
+# The macro syntax and templates are hand-encoded in the page.
+
+
+@app.get("/macros")
+async def macros_redirect() -> RedirectResponse:
+    return RedirectResponse(url="macros/")
+
+
+@app.get("/macros/macro.js")
+async def macros_js() -> FileResponse:
+    """The syntax model (commands, conditionals, templates, lint). Declared
+    before the class route so "macro.js" isn't taken for a class slug."""
+    return FileResponse(STATIC_DIR / "macros" / "macro.js", media_type="text/javascript")
+
+
+@app.get("/macros/")
+@app.get("/macros/{class_slug}")
+async def macros_index(class_slug: str | None = None) -> FileResponse:
+    """The builder page; it reads the class (and ?m= macro config) from its own URL."""
+    return FileResponse(STATIC_DIR / "macros" / "index.html")
+
+
+@app.get("/api/macros/classes")
+def macro_classes() -> list[dict]:
+    try:
+        with _talent_conn() as conn:
+            rows = conn.execute("SELECT slug, class_id, name, spell_count FROM macro_classes ORDER BY name").fetchall()
+    except sqlite3.OperationalError:
+        raise HTTPException(status_code=503, detail="Macro data missing — re-run the ingest.") from None
+    return [{"slug": r["slug"], "id": r["class_id"], "name": r["name"], "spells": r["spell_count"]} for r in rows]
+
+
+@app.get("/api/macros/meta")
+def macro_meta() -> dict:
+    with _talent_conn() as conn:
+        m = db.read_meta(conn)
+    n = lambda key: int(m.get(f"macros_{key}", 0))  # noqa: E731
+    return {
+        "forever_build": m.get("forever_build"), "forever_build_id": m.get("forever_build_id"),
+        "refreshed_at": m.get("refreshed_at"),
+        "classes": n("classes"), "spells": n("spells"), "talent_spells": n("talent_spells"),
+        "consumables": n("consumables"), "problems": n("problems"),
+    }
+
+
+@app.get("/api/macros/items")
+def macro_items() -> JSONResponse:
+    """Names for /use suggestions: consumables, then trinkets (best first)."""
+    try:
+        with _talent_conn() as conn:
+            consumables = [r[0] for r in conn.execute("SELECT name FROM macro_items ORDER BY name")]
+            trinkets = [r[0] for r in conn.execute(
+                "SELECT DISTINCT name FROM items WHERE slot = 'trinket' ORDER BY item_level DESC, name")]
+    except sqlite3.OperationalError:
+        raise HTTPException(status_code=503, detail="Macro data missing — re-run the ingest.") from None
+    return JSONResponse(content={"consumables": consumables, "trinkets": trinkets},
+                        headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/api/macros/{class_slug}")
+def macro_class(class_slug: str) -> JSONResponse:
+    try:
+        with _talent_conn() as conn:
+            row = conn.execute("SELECT data_json FROM macro_classes WHERE slug = ?",
+                               (class_slug.lower(),)).fetchone()
+    except sqlite3.OperationalError:
+        raise HTTPException(status_code=503, detail="Macro data missing — re-run the ingest.") from None
+    if row is None:
+        raise HTTPException(status_code=404, detail="No such class.")
+    return JSONResponse(content=json.loads(row["data_json"]))
