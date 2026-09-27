@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script>document.write('<base href="' + location.pathname.replace(/macros(\/.*)?$/, '') + 'macros/">');</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Macro Builder — WoW: Forever</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #1b160e;
+    --panel: #251e12;
+    --panel-edge: #3d331d;
+    --ink: #f0e6d2;
+    --ink-dim: #a89878;
+    --gold: #e0a82e;
+    --gold-dim: #8a6b1f;
+    --alert: #e2604c;
+    --warn: #e8b04a;
+    --ok: #8fc79a;
+    --info: #6aa5ff;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+    --sans: "Space Grotesk", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--sans); min-height: 100vh; padding: 2rem 1.25rem 4rem; }
+  .wrap { max-width: 1160px; margin: 0 auto; }
+  .back-links { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+  .back-link {
+    display: inline-flex; align-items: center; gap: 0.45rem;
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--ink-dim); text-decoration: none;
+    border: 1px solid var(--panel-edge); border-radius: 6px;
+    padding: 0.45rem 0.85rem; transition: color 0.15s, border-color 0.15s;
+  }
+  .back-link:hover { color: var(--gold); border-color: var(--gold); }
+  h1 { font-size: clamp(1.6rem, 4vw, 2.1rem); font-weight: 700; letter-spacing: -0.01em; margin-bottom: 0.9rem; }
+  h1 .accent { color: var(--gold); }
+  .banner {
+    background: rgba(224, 168, 46, 0.08); border: 1px solid rgba(224, 168, 46, 0.35); border-radius: 10px;
+    padding: 0.75rem 1rem; margin-bottom: 1rem; font-size: 0.78rem; line-height: 1.55;
+  }
+  .banner strong { color: var(--gold); }
+  .banner .meta-line { display: block; margin-top: 0.3rem; font-family: var(--mono); font-size: 0.68rem; color: var(--ink-dim); }
+  .caveat { font-size: 0.76rem; color: var(--ink-dim); line-height: 1.55; margin-bottom: 1.2rem; }
+  .caveat strong { color: var(--ink); font-weight: 500; }
+
+  .classes { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-bottom: 1rem; }
+  .class-btn {
+    font-family: var(--sans); font-size: 0.85rem; font-weight: 500; cursor: pointer;
+    padding: 0.45rem 0.8rem; border-radius: 8px; background: var(--panel);
+    border: 1px solid var(--panel-edge); color: var(--cc, var(--ink));
+  }
+  .class-btn:hover { border-color: var(--cc); }
+  .class-btn.on { background: color-mix(in srgb, var(--cc) 16%, var(--panel)); border-color: var(--cc); }
+  .class-btn .n { font-family: var(--mono); font-size: 0.62rem; color: var(--ink-dim); margin-left: 0.3rem; }
+
+  .builder { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 400px); gap: 1.2rem; align-items: start; }
+  .panel { background: var(--panel); border: 1px solid var(--panel-edge); border-radius: 12px; padding: 0.9rem 1rem; }
+  .panel + .panel { margin-top: 1rem; }
+  .panel h2 { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); font-weight: 500; margin-bottom: 0.7rem; }
+  .seg { display: inline-flex; border: 1px solid var(--panel-edge); border-radius: 8px; overflow: hidden; }
+  .seg button { font-family: var(--mono); font-size: 0.72rem; padding: 0.5rem 0.8rem; background: var(--bg); color: var(--ink-dim); border: none; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--panel-edge); }
+  .seg button.on { background: rgba(224,168,46,0.14); color: var(--gold); }
+  .modes { margin-bottom: 1rem; }
+
+  .tpls { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.55rem; }
+  .tpl {
+    text-align: left; cursor: pointer; font-family: var(--sans); color: var(--ink);
+    background: var(--bg); border: 1px solid var(--panel-edge); border-radius: 10px; padding: 0.6rem 0.75rem;
+  }
+  .tpl:hover { border-color: var(--gold-dim); }
+  .tpl.on { border-color: var(--gold); background: rgba(224,168,46,0.08); }
+  .tpl b { display: block; font-size: 0.86rem; font-weight: 500; margin-bottom: 0.2rem; }
+  .tpl.on b { color: var(--gold); }
+  .tpl span { display: block; font-size: 0.7rem; color: var(--ink-dim); line-height: 1.45; }
+  .blurb { font-size: 0.78rem; color: var(--ink-dim); line-height: 1.55; margin-bottom: 0.8rem; }
+
+  .slots { display: grid; gap: 0.75rem; }
+  .field { display: flex; flex-direction: column; gap: 0.3rem; }
+  .field > label, .field .lbl { font-family: var(--mono); font-size: 0.64rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); }
+  select, input[type=number], input[type=text] {
+    font-family: var(--sans); font-size: 0.88rem; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--panel-edge); border-radius: 8px; padding: 0.42rem 0.55rem; min-width: 0; max-width: 100%;
+  }
+  select:focus, input:focus { outline: none; border-color: var(--gold-dim); }
+  input[type=number] { width: 6rem; font-family: var(--mono); }
+  .check { display: flex; align-items: center; gap: 0.45rem; font-size: 0.84rem; cursor: pointer; }
+  .check input { accent-color: var(--gold); width: 1rem; height: 1rem; }
+
+  .picker { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
+  .picker select.spell { flex: 1 1 11rem; }
+  .picker input.custom { flex: 1 1 12rem; }
+  .picker select.rank { flex: 0 0 auto; width: auto; }
+  .sp-icon { width: 30px; height: 30px; border-radius: 5px; border: 1px solid var(--panel-edge); background: var(--bg); flex: 0 0 auto; }
+  .sp-icon.empty { visibility: hidden; }
+  .tog { font-size: 0.76rem; color: var(--ink-dim); }
+  .none-note { font-size: 0.76rem; color: var(--warn); }
+  .list { display: grid; gap: 0.4rem; }
+  .list-row { display: flex; gap: 0.4rem; align-items: center; }
+  .list-row .n { font-family: var(--mono); font-size: 0.7rem; color: var(--ink-dim); width: 1.3rem; text-align: right; }
+  .list-row .picker { flex: 1; min-width: 0; }
+  .slots > *, .list, .list-row { min-width: 0; }  /* let long spell selects shrink on phones */
+  .icon-btn {
+    font-family: var(--mono); font-size: 0.72rem; cursor: pointer; color: var(--ink-dim);
+    background: var(--bg); border: 1px solid var(--panel-edge); border-radius: 6px; padding: 0.3rem 0.5rem; line-height: 1;
+  }
+  .icon-btn:hover { color: var(--gold); border-color: var(--gold-dim); }
+  .icon-btn:disabled { opacity: 0.35; cursor: default; }
+  .add-btn { justify-self: start; }
+
+  .out { position: sticky; top: 1rem; }
+  .out textarea {
+    width: 100%; min-height: 12rem; resize: vertical; font-family: var(--mono); font-size: 0.84rem; line-height: 1.55;
+    color: var(--ink); background: #120e08; border: 1px solid var(--panel-edge); border-radius: 8px; padding: 0.7rem 0.75rem;
+    white-space: pre; overflow-x: auto;  /* line breaks matter in a macro: don't soft-wrap */
+  }
+  .out textarea.over { border-color: var(--alert); }
+  .out-bar { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.6rem; flex-wrap: wrap; }
+  .count { font-family: var(--mono); font-size: 0.8rem; color: var(--ok); margin-right: auto; }
+  .count.near { color: var(--warn); }
+  .count.over { color: var(--alert); font-weight: 500; }
+  .meter { height: 4px; border-radius: 2px; background: var(--bg); margin-top: 0.5rem; overflow: hidden; }
+  .meter span { display: block; height: 100%; background: var(--ok); }
+  .meter.near span { background: var(--warn); }
+  .meter.over span { background: var(--alert); }
+  .btn {
+    font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 0.5rem 0.8rem; border-radius: 8px; cursor: pointer;
+    background: rgba(224,168,46,0.12); border: 1px solid var(--gold-dim); color: var(--gold);
+  }
+  .btn:hover { border-color: var(--gold); }
+  .btn.quiet { background: var(--bg); border-color: var(--panel-edge); color: var(--ink-dim); }
+  .btn.quiet:hover { color: var(--gold); border-color: var(--gold-dim); }
+  .msg { font-size: 0.72rem; color: var(--ok); min-height: 1em; margin-top: 0.4rem; word-break: break-all; }
+  .lint { list-style: none; padding: 0; margin-top: 0.7rem; display: grid; gap: 0.35rem; }
+  .lint li { font-size: 0.74rem; line-height: 1.45; padding: 0.4rem 0.55rem; border-radius: 6px; border-left: 3px solid; background: var(--bg); }
+  .lint li.error { border-color: var(--alert); }
+  .lint li.warn { border-color: var(--warn); }
+  .lint li.info { border-color: var(--info); color: var(--ink-dim); }
+  .lint li b { font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; margin-right: 0.35rem; }
+  .lint li.error b { color: var(--alert); } .lint li.warn b { color: var(--warn); } .lint li.info b { color: var(--info); }
+  .lint .clean { border-color: var(--ok); color: var(--ok); }
+
+  .empty { font-size: 0.85rem; color: var(--ink-dim); padding: 1rem 0; }
+  .note { font-size: 0.74rem; color: var(--ink-dim); line-height: 1.6; margin-top: 1.2rem; }
+  .note code, .blurb code { font-family: var(--mono); font-size: 0.7rem; color: var(--ink); }
+  @media (max-width: 860px) { .builder { grid-template-columns: minmax(0, 1fr); } .out { position: static; } }
+  @media (max-width: 600px) { body { padding: 1.5rem 0.9rem 3rem; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="back-links">
+    <a class="back-link" href="../">‹ WoW: Forever</a>
+    <a class="back-link" href="/">‹ Back to August.</a>
+  </div>
+  <h1>Macro <span class="accent">Builder</span></h1>
+  <div class="banner" id="banner">Loading build info…</div>
+  <p class="caveat"><strong>Modern macro system, classic game.</strong> Forever runs on the modern client, so it has the full macro syntax:
+    conditionals, focus, <code>/castsequence</code>, modifier branches. Most of it works as on retail; a few conditionals are provisional
+    in the beta (especially how <code>[spec:]</code> maps to the Primary/Secondary talent setups) and are marked “verify in-game”.
+    The builder guarantees correct <strong>syntax</strong>, not that a spell exists at your level or spec.</p>
+
+  <div class="classes" id="classes"></div>
+  <div id="app"><div class="empty">Pick a class to start.</div></div>
+</div>
+
+<script src="macro.js"></script>
+<script>
+const CLASS_COLORS = { druid: '#ff7c0a', hunter: '#aad372', mage: '#3fc7eb', paladin: '#f48cba', priest: '#ffffff',
+  rogue: '#fff468', shaman: '#2d8cf0', warlock: '#8788ee', warrior: '#c69b6d' };
+const M = window.Macro;
+const state = { classes: [], data: null, items: null, mode: 'tpl', tpl: 'mouseover-help', v: {} };
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+async function api(path) {
+  const res = await fetch('../api/' + path);
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+  return res.json();
+}
+const spellCtx = () => ({ cls: state.data.slug, className: state.data.name, spells: state.data.spells });
+const spellByName = n => n && state.data.spells.find(s => s.name.toLowerCase() === String(n).toLowerCase());
+const iconUrl = s => (s && s.icon ? `../api/fileicon/${s.icon}.jpg` : '');
+
+// ── shared inputs ────────────────────────────────────────────────────────
+// A spell picker: <select> of the class's spells (suggested first), a
+// "custom name" escape hatch, an optional rank, and optionally the "!"
+// toggle. `key` identifies it for the change handler.
+const CUSTOM = '__custom__';  // can't collide: spell names have no underscores
+function spellPicker(key, arg, slot = {}, opts = {}) {
+  const { suggested, rest, pet } = M.suggestions(slot, state.data.spells);
+  const name = arg && arg.n ? arg.n : '';
+  const custom = !!(arg && arg.custom) || (!!name && !spellByName(name));
+  const known = custom ? null : spellByName(name);
+  const opt = s => `<option value="${esc(s.name)}"${known === s ? ' selected' : ''}>${esc(s.name)}${s.ranks > 1 ? ` (${s.ranks} ranks)` : ''}${s.talent ? ' · talent' : ''}</option>`;
+  const groups = [];
+  if (suggested.length) groups.push(`<optgroup label="Suggested">${suggested.map(opt).join('')}</optgroup>`);
+  groups.push(`<optgroup label="${suggested.length ? 'All other' : 'All'} ${esc(state.data.name)} spells">${rest.map(opt).join('')}</optgroup>`);
+  if (pet.length) groups.push(`<optgroup label="Pet abilities (/cast commands the pet)">${pet.map(opt).join('')}</optgroup>`);
+  const rank = known && known.ranks > 1 && !opts.noRank
+    ? `<select class="rank" data-k="${key}" data-part="rank" title="Pick a lower rank to downrank">
+        <option value="0">Highest rank</option>${Array.from({ length: known.ranks }, (_, i) => known.ranks - i)
+          .map(r => `<option value="${r}"${arg.r === r ? ' selected' : ''}>Rank ${r}</option>`).join('')}</select>` : '';
+  const toggle = opts.toggle
+    ? `<label class="check tog" title="“!” stops a second press from cancelling it (forms, Stealth, auto-shot)"><input type="checkbox" data-k="${key}" data-part="toggle"${arg && arg.t ? ' checked' : ''}> !</label>` : '';
+  return `<div class="picker">
+    <img class="sp-icon${known && known.icon ? '' : ' empty'}" src="${iconUrl(known)}" alt="" loading="lazy">
+    <select class="spell" data-k="${key}" data-part="name">
+      ${!name && !custom ? `<option value="" selected>${slot.optional ? '— none —' : '— pick a spell —'}</option>` : slot.optional ? '<option value="">— none —</option>' : ''}
+      ${groups.join('')}
+      <option value="${CUSTOM}"${custom ? ' selected' : ''}>✎ Other name (item, racial…)</option>
+    </select>
+    ${custom ? `<input type="text" class="custom" data-k="${key}" data-part="custom" value="${esc(name)}" list="dl-names" placeholder="Exact spell or item name" spellcheck="false">` : ''}
+    ${rank}${toggle}
+  </div>`;
+}
+
+function itemPicker(key, arg, placeholder = 'Item name, e.g. Major Healing Potion') {
+  loadItems();
+  return `<div class="picker"><input type="text" class="custom" data-k="${key}" data-part="custom" value="${esc(arg && arg.n || '')}"
+    list="dl-items" placeholder="${esc(placeholder)}" spellcheck="false"></div>`;
+}
+
+function modSelect(key, value, noneLabel) {
+  const opts = noneLabel != null ? [['', noneLabel]] : [];
+  opts.push(...M.MODS.map(m => [m, m[0].toUpperCase() + m.slice(1)]));
+  return `<select data-k="${key}" data-part="value">${opts.map(([v, l]) => `<option value="${v}"${value === v ? ' selected' : ''}>${l}</option>`).join('')}</select>`;
+}
+
+// /use suggestions: fetched once, the first time an item box is shown.
+let itemsLoading = null;
+function loadItems() {
+  itemsLoading ||= api('macros/items').catch(() => ({ consumables: [], trinkets: [] }))
+    .then(items => { state.items = items; fillItems(); });
+}
+function fillItems() {
+  const dl = document.getElementById('dl-items');
+  if (dl && state.items && !dl.childElementCount) {
+    dl.innerHTML = [...state.items.trinkets, ...state.items.consumables].map(n => `<option value="${esc(n)}">`).join('');
+  }
+}
+
+// Read a picker's new value back into an Arg.
+function pickerValue(prev, part, el) {
+  const a = { ...(prev || {}) };
+  if (part === 'name') {
+    if (el.value === CUSTOM) return { n: '', r: 0, custom: true };
+    return el.value ? { n: el.value, r: 0, t: a.t } : null;
+  }
+  if (part === 'custom') return { n: el.value, r: 0, t: a.t, custom: true };
+  if (part === 'rank') a.r = Number(el.value) || 0;
+  if (part === 'toggle') a.t = el.checked;
+  return a;
+}
+
+// ── template mode ────────────────────────────────────────────────────────
+function tplEditor() {
+  const t = M.TEMPLATE[state.tpl];
+  const v = state.v;
+  const slots = t.slots.filter(s => !s.when || s.when(v)).map(s => {
+    const k = `v.${s.k}`;
+    if (s.kind === 'spell') {
+      const { suggested } = M.suggestions(s, state.data.spells);
+      const none = s.strict && !suggested.length
+        ? `<div class="none-note">${esc(state.data.name)} has no ${s.suggest === 'ground' ? 'ground-targeted' : 'friendly-target'} spells in the data; pick another name if you have one.</div>` : '';
+      return `<div class="field"><label>${esc(s.label)}</label>${spellPicker(k, v[s.k], s)}${none}</div>`;
+    }
+    if (s.kind === 'spells') {
+      const list = v[s.k] || [];
+      return `<div class="field"><label>${esc(s.label)}</label><div class="list">
+        ${list.map((a, i) => `<div class="list-row"><span class="n">${i + 1}</span>${spellPicker(`${k}.${i}`, a, {})}
+          <button class="icon-btn" data-act="up" data-k="${k}" data-i="${i}" ${i ? '' : 'disabled'} title="Move up">↑</button>
+          <button class="icon-btn" data-act="del" data-k="${k}" data-i="${i}" ${list.length > 1 ? '' : 'disabled'} title="Remove">✕</button></div>`).join('')}
+        <button class="icon-btn add-btn" data-act="add" data-k="${k}" ${list.length >= (s.max || 8) ? 'disabled' : ''}>+ Add spell</button></div></div>`;
+    }
+    if (s.kind === 'item') return `<div class="field"><label>${esc(s.label)}</label>${itemPicker(k, v[s.k])}</div>`;
+    if (s.kind === 'mod') return `<div class="field"><label>${esc(s.label)}</label>${modSelect(k, v[s.k] || '', s.none)}</div>`;
+    if (s.kind === 'bool') return `<label class="check"><input type="checkbox" data-k="${k}" data-part="bool"${v[s.k] ? ' checked' : ''}> ${esc(s.label)}</label>`;
+    if (s.kind === 'number') return `<div class="field"><label>${esc(s.label)}</label><input type="number" data-k="${k}" data-part="number" min="${s.min ?? 0}" max="${s.max ?? 999}" value="${Number(v[s.k]) || 0}"></div>`;
+    if (s.kind === 'choice') return `<div class="field"><label>${esc(s.label)}</label><select data-k="${k}" data-part="value">${s.opts.map(([ov, l]) => `<option value="${ov}"${v[s.k] === ov ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></div>`;
+    return '';
+  }).join('');
+  return `<div class="panel"><h2>1 · Pick a template</h2><div class="tpls">
+      ${M.TEMPLATES.map(x => `<button class="tpl${x.id === state.tpl ? ' on' : ''}" data-tpl="${x.id}"><b>${esc(x.name)}</b><span>${esc(x.blurb)}</span></button>`).join('')}
+    </div></div>
+    <div class="panel"><h2>2 · Fill it in</h2><p class="blurb">${esc(t.blurb)}</p><div class="slots">${slots}</div></div>`;
+}
+
+function currentConfig() {
+  return M.TEMPLATE[state.tpl].build(state.v);
+}
+
+// ── output ───────────────────────────────────────────────────────────────
+function renderOutput() {
+  const cfg = currentConfig();
+  const text = M.render(cfg);
+  const n = M.charCount(text);
+  const lvl = n > M.MAX_CHARS ? 'over' : n > M.MAX_CHARS - 25 ? 'near' : '';
+  const ta = document.getElementById('macro');
+  ta.value = text;
+  ta.className = lvl === 'over' ? 'over' : '';
+  ta.rows = Math.max(6, text.split('\n').length + 1);
+  const count = document.getElementById('count');
+  count.className = 'count ' + lvl;
+  count.textContent = `${n} / ${M.MAX_CHARS}${lvl === 'over' ? ` — ${n - M.MAX_CHARS} over!` : ''}`;
+  const meter = document.getElementById('meter');
+  meter.className = 'meter ' + lvl;
+  meter.firstElementChild.style.width = Math.min(100, (100 * n) / M.MAX_CHARS) + '%';
+  const issues = M.lint(cfg, spellCtx());
+  const order = { error: 0, warn: 1, info: 2 };
+  issues.sort((a, b) => order[a.level] - order[b.level]);
+  document.getElementById('lint').innerHTML = issues.length
+    ? issues.map(i => `<li class="${i.level}"><b>${i.level === 'warn' ? 'check' : i.level === 'info' ? 'note' : 'error'}</b>${esc(i.msg)}</li>`).join('')
+    : '<li class="clean"><b>ok</b>Valid syntax.</li>';
+  syncUrl();
+}
+
+function outputPanel() {
+  return `<div class="panel out">
+    <h2>Your macro</h2>
+    <textarea id="macro" readonly spellcheck="false" aria-label="Generated macro text"></textarea>
+    <div class="meter" id="meter"><span></span></div>
+    <div class="out-bar">
+      <span class="count" id="count"></span>
+      <button class="btn" id="copyMacro">Copy macro</button>
+      <button class="btn quiet" id="copyLink" title="A link that reopens this macro in the builder">Copy link</button>
+    </div>
+    <div class="msg" id="msg"></div>
+    <ul class="lint" id="lint"></ul>
+    <p class="note">In game: <code>/macro</code> → New → paste. Pick the “?” icon so <code>#showtooltip</code> can show the spell's icon and cooldown.</p>
+  </div>`;
+}
+
+// ── page ─────────────────────────────────────────────────────────────────
+function render() {
+  document.getElementById('app').innerHTML = `
+    <div class="builder">
+      <div id="editor">${tplEditor()}</div>
+      ${outputPanel()}
+    </div>
+    <datalist id="dl-names">${state.data.spells.map(s => `<option value="${esc(s.name)}">`).join('')}</datalist>
+    <datalist id="dl-items"></datalist>`;
+  fillItems();
+  wireOutput();
+  renderOutput();
+}
+
+function renderEditor() {
+  const ed = document.getElementById('editor');
+  ed.innerHTML = tplEditor();
+  renderOutput();
+}
+
+// Path "v.spell" / "v.spells.2" → get/set inside state.
+function getPath(path) {
+  return path.split('.').reduce((o, k) => (o == null ? o : o[k]), state);
+}
+function setPath(path, value) {
+  const keys = path.split('.');
+  const last = keys.pop();
+  const obj = keys.reduce((o, k) => o[k], state);
+  obj[last] = value;
+}
+
+function onChange(e) {
+  const el = e.target;
+  const k = el.dataset.k, part = el.dataset.part;
+  if (!k || !part) return;
+  const typing = e.type === 'input';
+  if (typing && !(part === 'custom' || part === 'number')) return;
+  let structural = false;
+  if (part === 'name' || part === 'custom' || part === 'rank' || part === 'toggle') {
+    const next = pickerValue(getPath(k), part, el);
+    structural = part === 'name' || part === 'rank';  // icon / rank list change
+    setPath(k, next);
+  } else if (part === 'bool') { setPath(k, el.checked); structural = true; }
+  else if (part === 'number') setPath(k, Math.max(0, Math.round(Number(el.value) || 0)));
+  else { setPath(k, el.value); structural = true; }
+  if (structural && !typing) renderEditor(); else renderOutput();
+}
+
+function onClick(e) {
+  const t = e.target.closest('[data-tpl],[data-act]');
+  if (!t) return;
+  if (t.dataset.tpl) {
+    if (t.dataset.tpl === state.tpl) return;
+    state.tpl = t.dataset.tpl;
+    state.v = M.templateDefaults(M.TEMPLATE[state.tpl], spellCtx());
+    renderEditor();
+    return;
+  }
+  const list = getPath(t.dataset.k);
+  const i = Number(t.dataset.i);
+  if (t.dataset.act === 'add') list.push(null);
+  else if (t.dataset.act === 'del') list.splice(i, 1);
+  else if (t.dataset.act === 'up' && i > 0) [list[i - 1], list[i]] = [list[i], list[i - 1]];
+  renderEditor();
+}
+
+// The copy buttons are re-created with the page; editor events are delegated
+// from #app once, at boot.
+function wireOutput() {
+  const msg = document.getElementById('msg');
+  const copy = async (text, ok) => {
+    try { await navigator.clipboard.writeText(text); msg.textContent = ok; }
+    catch { const ta = document.getElementById('macro'); ta.focus(); ta.select(); msg.textContent = 'Copy blocked by the browser: the macro is selected, press Ctrl+C.'; }
+  };
+  document.getElementById('copyMacro').addEventListener('click', () => {
+    const text = document.getElementById('macro').value;
+    copy(text, M.charCount(text) > M.MAX_CHARS ? 'Copied, but it is over 255 characters: the game will cut it off.' : 'Macro copied. Paste it into /macro in game.');
+  });
+  document.getElementById('copyLink').addEventListener('click', () => copy(location.href, 'Link copied: it reopens this macro here.'));
+}
+
+// ── URL ──────────────────────────────────────────────────────────────────
+// /macros/<class>?m=<base64url JSON>: { t, v } for a template.
+function shareState() {
+  return { t: state.tpl, v: state.v };
+}
+function syncUrl() {
+  if (!state.data) return;
+  const url = new URL(`${state.data.slug}?m=${M.encode(shareState())}`, document.baseURI);
+  history.replaceState(null, '', url.href);
+}
+
+function applyShared(st) {
+  if (st && M.TEMPLATE[st.t]) {
+    state.mode = 'tpl';
+    state.tpl = st.t;
+    state.v = { ...M.templateDefaults(M.TEMPLATE[st.t], spellCtx()), ...(st.v || {}) };
+    return true;
+  }
+  return false;
+}
+
+function renderClasses() {
+  document.getElementById('classes').innerHTML = state.classes.map(c =>
+    `<button class="class-btn${state.data && state.data.slug === c.slug ? ' on' : ''}" data-slug="${c.slug}" style="--cc:${CLASS_COLORS[c.slug] || 'var(--gold)'}">
+      ${esc(c.name)}<span class="n">${c.spells} spells</span></button>`).join('');
+  document.querySelectorAll('.class-btn').forEach(b => b.addEventListener('click', async () => {
+    if (state.data && state.data.slug === b.dataset.slug) return;
+    history.pushState(null, '', new URL(b.dataset.slug, document.baseURI).href);
+    await loadFromUrl();
+  }));
+}
+
+async function loadFromUrl() {
+  const m = location.pathname.match(/\/macros\/([a-z]+)\/?$/i);
+  const q = new URLSearchParams(location.search);
+  if (!m) { state.data = null; renderClasses(); document.getElementById('app').innerHTML = '<div class="empty">Pick a class to start.</div>'; return; }
+  try {
+    state.data = await api('macros/' + m[1].toLowerCase());
+  } catch (e) {
+    state.data = null; renderClasses();
+    document.getElementById('app').innerHTML = `<div class="empty">${esc(e.message)} Pick a class above.</div>`;
+    return;
+  }
+  document.title = `${state.data.name} Macro Builder — WoW: Forever`;
+  if (!applyShared(q.has('m') ? M.decode(q.get('m')) : null)) {
+    state.v = M.templateDefaults(M.TEMPLATE[state.tpl], spellCtx());
+  }
+  renderClasses();
+  render();
+}
+addEventListener('popstate', loadFromUrl);
+
+(async function boot() {
+  const banner = document.getElementById('banner');
+  try {
+    const m = await api('macros/meta');
+    banner.innerHTML = `<strong>Beta data</strong> — class spell lists from Forever build ${esc(m.forever_build_id)}. ` +
+      `Spells may be added, renamed or removed before the Nov 4 launch.` +
+      `<span class="meta-line">${m.classes} classes · ${m.spells} castable spells (${m.talent_spells} from talents) · ${m.consumables} consumables for /use suggestions</span>`;
+  } catch (e) {
+    banner.innerHTML = '<strong>Beta data</strong> — build info unavailable right now (has the ingest run yet?).';
+  }
+  try {
+    state.classes = await api('macros/classes');
+  } catch (e) {
+    document.getElementById('app').innerHTML = `<div class="empty">Spell data unavailable: ${esc(e.message)}</div>`;
+    return;
+  }
+  const app = document.getElementById('app');
+  app.addEventListener('change', onChange);
+  app.addEventListener('input', onChange);
+  app.addEventListener('click', onClick);
+  renderClasses();
+  await loadFromUrl();
+})();
+</script>
+</body>
+</html>

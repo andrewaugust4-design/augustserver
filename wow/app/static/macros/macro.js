@@ -409,7 +409,7 @@
         { k: 'mod1', kind: 'mod', label: 'Modifier 1', def: 'shift' },
         { k: 'alt1', kind: 'spell', label: 'Spell with modifier 1', suggest: 'any', prefer: DUAL, pick: 1 },
         { k: 'mod2', kind: 'mod', label: 'Modifier 2', def: '', none: 'None' },
-        { k: 'alt2', kind: 'spell', label: 'Spell with modifier 2', suggest: 'any', pick: 2, optional: true },
+        { k: 'alt2', kind: 'spell', label: 'Spell with modifier 2', suggest: 'any', pick: 2, optional: true, when: v => !!v.mod2 },
       ],
       build: v => {
         const b = [{ g: [{ m: 'mod:' + (v.mod1 || 'shift') }], a: v.alt1 }];
