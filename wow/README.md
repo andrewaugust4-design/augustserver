@@ -689,6 +689,13 @@ python -m ingest.run --force    # re-download even if cached
 python -m ingest.run --cdn      # pull the current Forever build from Blizzard's CDN now
 ```
 
+`ingest` is a package in the wow directory, not an installed module, so run
+these from there. On the server, that means `/opt/wow` as `www-data`:
+
+```
+cd /opt/wow && sudo -u www-data ./venv/bin/python -m ingest.run --cdn
+```
+
 Run once by hand after first deploy (before starting `wow.service`) to
 populate `data/wow.db`, and again after any deploy that changes the DB
 schema (the app reads whatever the last ingest wrote). The set-builder
