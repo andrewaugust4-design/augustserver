@@ -681,6 +681,66 @@ class's base mana at 60, from the client's `PlayerExpectedStat`.
   (`gear/set/<id>`). The set sheet doesn't total spell power yet (it's listed
   under "other gear bonuses"), so that comes first.
 
+## Macro Builder (sub-tool #5, `/wow/macros/`)
+
+Pick a class, then either fill in a **template** (mouseover heal, mouseover
+attack, focus cast/interrupt, modifier dual/triple spell, trinkets +
+ability, cast sequence, start attack + ability, cancel-aura toggle, cast at
+cursor) or build any macro line by line in the **freeform** mode. The text
+updates live with a 255-character counter (amber near the limit, red over
+it), a copy button and lint notes. The whole config is in the URL
+(`/wow/macros/<class>?m=<base64url JSON>`), so a link reopens the macro.
+
+- **The syntax is hand-encoded, not datamined.** `app/static/macros/macro.js`
+  holds the modern macro system that Forever's client uses: 25 commands, the
+  conditionals (`@unit`, help/harm, exists, dead, mod, combat, stance/form,
+  stealth, mounted, channeling, button, spec, pet, group, indoors, swimming,
+  talent, known, equipped…), `;` fallbacks, `[a][b]` OR brackets,
+  `/castsequence reset=`, `Spell(Rank N)` and `!Spell`. It has no DOM code.
+- **Left out on purpose:** retail-only conditionals that mean nothing in a
+  level-60 classic world (`flyable`/`flying`, covenant, pvptalent,
+  vehicleui, petbattle, bonusbar/overridebar/possessbar, extrabar, warmode)
+  and `@arena` / `@boss` units. The linter refuses them with the reason.
+- **Provisional (marked "verify in-game"):** `[spec:1/2]` (probably
+  Forever's Primary/Secondary talent setups), `[talent:row/col]`,
+  `[known:]`, and the druid/paladin stance numbers, which follow the
+  stance-bar order of what you've learned.
+- **Lint:** over 255 characters, contradictions (help+harm, dead+nodead, two
+  @units), unknown or bad-valued conditionals, branches that can never run
+  (after an unconditional one, or repeating earlier conditions), a rank the
+  spell doesn't have, `@cursor` on a spell that isn't ground-targeted,
+  `[ ] ;` inside a name, and names that aren't the class's spells (a note,
+  since items and racials are fine). It checks syntax, not whether you have
+  the spell at your level or spec.
+
+### Data (`ingest/macros.py` → `macro_classes`, `macro_items`)
+
+- **Spells** are the Downrank Calculator's trainer set (class skill lines,
+  AcquireMethod 0/2) plus every non-passive talent spell from the talent
+  data. Dropped: passives (`Attributes_0 & 0x40`), "(Passive)" / "… Effect"
+  helpers, class-line rows with no `SpellLevels` level (unflagged talent
+  procs), names shared with a passive talent (its proc), and a short
+  `PROC_NAMES` list (Chilled, Clearcasting, Lightwell Renew). Filtering on
+  "triggered by another spell" was tried and rejected: it also drops
+  Backstab, Bear Form and the stances. That leaves 508 spells across 9
+  classes on 1.60.1.70009, 83 of them from talents.
+- **One entry per name** with the top rank's ID, the rank count and the
+  rank-1 level. Hunter pet abilities (Beast Training's "teach pet" spells,
+  `Attributes_4 & 0x8000`) are kept and tagged `pet`, because `/cast Bite`
+  commands the pet.
+- **Target hint** from the top rank's `ImplicitTarget`: 87 = ground, 21/56/57
+  = friendly, 6 = enemy, 25 = either. It only orders the template pickers
+  ("Suggested" first). Every spell stays pickable. The ingest checks
+  anchors each run (Flash Heal help, Penance either, Blizzard ground, Kick
+  harm…).
+- **Consumables** for `/use` suggestions: `Item` ClassID 0 names, with
+  test/placeholder rows filtered out. Trinket names come from the existing
+  `items` table.
+- Spell icons are warmed with the talent icons (`/api/fileicon/<fdid>.jpg`).
+
+API: `/api/macros/classes`, `/api/macros/meta`, `/api/macros/items`,
+`/api/macros/<class>`.
+
 ## Refreshing the data
 
 ```
